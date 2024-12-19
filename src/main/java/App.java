@@ -1,5 +1,3 @@
-package main.java;
-
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.s3.AmazonS3;
@@ -10,6 +8,16 @@ import com.amazonaws.services.ec2.model.InstanceType;
 import com.amazonaws.services.elasticmapreduce.AmazonElasticMapReduce;
 import com.amazonaws.services.elasticmapreduce.AmazonElasticMapReduceClientBuilder;
 import com.amazonaws.services.elasticmapreduce.model.*;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
+
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public class App {
     public static AWSCredentialsProvider credentialsProvider;
@@ -39,7 +47,7 @@ public class App {
 
         // Step 1
         HadoopJarStepConfig step1 = new HadoopJarStepConfig()
-                .withJar("s3://bucket163897429777/jars/WordCount.jar")
+                .withJar("s3://jarbucket1012/jars/LocalApp.jar")
                 .withMainClass("Step1");
 
         StepConfig stepConfig1 = new StepConfig()
@@ -62,7 +70,7 @@ public class App {
                 .withName("Map reduce project")
                 .withInstances(instances)
                 .withSteps(stepConfig1)
-                .withLogUri("s3://bucket163897429777/logs/")
+                .withLogUri("s3://jarbucket1012/logs/")
                 .withServiceRole("EMR_DefaultRole")
                 .withJobFlowRole("EMR_EC2_DefaultRole")
                 .withReleaseLabel("emr-5.11.0");
@@ -70,5 +78,34 @@ public class App {
         RunJobFlowResult runJobFlowResult = emr.runJobFlow(runFlowRequest);
         String jobFlowId = runJobFlowResult.getJobFlowId();
         System.out.println("Ran job flow with id: " + jobFlowId);
+
+
+//        // Read first few lines from file
+//        String bucketName = "datasets.elasticmapreduce";
+//        String objectKey = "ngrams/books/20090715/heb-all/3gram/data";
+//        String localFilePath = "first_5_lines.txt";
+//        int maxBytesToFetch = 8192*10; // Fetch the first 8 KB (adjust as needed)
+//
+//        // Fetch the first part of the file using a range request
+//        GetObjectRequest request = new GetObjectRequest(bucketName, objectKey)
+//                .withRange(0, maxBytesToFetch - 1); // Fetch first 8 KB
+//
+//        try (S3Object s3Object = S3.getObject(request);
+//             BufferedReader reader = new BufferedReader(new InputStreamReader(s3Object.getObjectContent()))) {
+//
+//            Path localFile = Paths.get(localFilePath);
+//            try (BufferedWriter writer = Files.newBufferedWriter(localFile)) {
+//                String line;
+//                int lineCount = 0;
+//                while ((line = reader.readLine()) != null && lineCount < 1000) {
+//                    writer.write(line);
+//                    writer.newLine();
+//                    lineCount++;
+//                }
+//            }
+//            System.out.println("First 5 lines saved to: " + localFilePath);
+//        } catch (Exception e) {
+//            System.err.println("Error occurred: " + e.getMessage());
+//        }
     }
 }
