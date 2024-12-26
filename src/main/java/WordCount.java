@@ -9,6 +9,7 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
@@ -24,6 +25,7 @@ import java.util.HashSet;
 public class WordCount {
     public static class MapperClass extends Mapper<LongWritable, Text, Text, Text> {
         public final HashSet<String> STOPWORDS = new HashSet<>();
+        private String currentFileName;
 
         @Override
         protected void setup(Context context) {
@@ -36,6 +38,10 @@ public class WordCount {
                     "האמת", "דברי", "במקום", "בהם", "אמרו", "אינם", "אחרי", "אותם", "אדם", "(", "חלק", "שני", "שכל", "שאר", "ש", "ר", "פעמים", "נעשה", "ן", "ממנו",
                     "מלא", "מזה", "ם", "לפי", "ל", "כמו", "כבר", "כ", "זו", "ומה", "ולכל", "ובין", "ואין", "הן", "היתה", "הא", "ה", "בל", "בין", "בזה", "ב", "אף",
                     "אי", "אותה", "או", "אבל", "א", "");
+
+            FileSplit fileSplit = (FileSplit) context.getInputSplit();
+            currentFileName = fileSplit.getPath().getName();
+            System.out.println("Processing file: " + currentFileName);
         }
 
         protected boolean isValuable(String[] words){
@@ -48,15 +54,32 @@ public class WordCount {
             return true;
         }
 
+
+        @Override
         public void map(LongWritable lineId, Text line, Context context) throws IOException, InterruptedException {
-            Counter globalCounter = context.getCounter("Global", "TotalRows");
+            // Counter globalCounter = context.getCounter("Global", "TotalRows");
 
             String[] fields = line.toString().split("\t");
 
-            if (isValuable(fields[0].split(" "))) {
-                System.out.println("[DEBUG] " + fields[0] + " " + fields[2]);
-                context.write(new Text(fields[0]), new Text(fields[2]));
+            if (currentFileName.contains("3gram")) {
+                if (isValuable(fields[0].split(" "))) {
+                    System.out.println("[DEBUG] " + fields[0] + " " + fields[2]);
+                    context.write(new Text(fields[0]), new Text(fields[2]));
+                }
             }
+            else if (currentFileName.contains("2gram")) {
+                if (isValuable(fields[0].split(" "))) {
+                    System.out.println("[DEBUG] " + fields[0] + " " + fields[2]);
+                    context.write(new Text(fields[0]), new Text(fields[2]));
+                }
+            }
+            else if (currentFileName.contains("1gram")) {
+                if (isValuable(fields[0].split(" "))) {
+                    System.out.println("[DEBUG] " + fields[0] + " " + fields[2]);
+                    context.write(new Text(fields[0]), new Text(fields[2]));
+                }
+            }
+
         }
     }
 
@@ -174,12 +197,15 @@ public class WordCount {
 
 //        conf.set("mapreduce.input.fileinputformat.split.maxsize", "128000000");
 
-        FileInputFormat.addInputPath(job, new Path(args[1]));
-//        FileInputFormat.addInputPath(job, new Path("/user/local/input/1gram_sample.csv"));
-//        FileInputFormat.addInputPath(job, new Path("/user/local/input/2gram_sample.csv"));
-//        FileInputFormat.addInputPath(job, new Path("/user/local/input/3gram_sample.csv"));
+//        FileInputFormat.addInputPath(job, new Path(args[1]));
+//        FileOutputFormat.setOutputPath(job, new Path(args[2]));
 
-        FileOutputFormat.setOutputPath(job, new Path(args[2]));
+        FileInputFormat.addInputPath(job, new Path("/user/local/input/1gram_sample.csv"));
+        FileInputFormat.addInputPath(job, new Path("/user/local/input/2gram_sample.csv"));
+        FileInputFormat.addInputPath(job, new Path("/user/local/input/3gram_sample.csv"));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+
 
         // Enable MultipleOutputs
 //        MultipleOutputs.addNamedOutput(job, "1gram", TextOutputFormat.class, Text.class, Text.class);
