@@ -268,7 +268,7 @@ public class Step2
                 double prob = k3 * (n3/n2_w1w2) + (1 - k3)*k2*(n2_w2w3/n1_w2) + (1 - k3)*(1 - k2)*(n1_w3/c0);
 
 
-                context.write(new Text(String.format("%s %s %s", w1, w2, w3)), new Text(prob.toString()));
+//                context.write(new Text(String.format("%s %s %s", w1, w2, w3)), new Text(prob.toString()));
             }
         }
     }
@@ -376,7 +376,7 @@ public class Step2
 //            return (baseKey.hashCode() & Integer.MAX_VALUE) % numPartitions;
 //        }
 //
-    public static void calculateProbabilities(double N1, double N2, double N3, double C0, double C1, double C2) {
+    public static void calculateProbabilities(double N1, double N2, double N3, double C0, double C1,double C2) {
 
         double k2 = (Math.log(N2 + 1) + 1) / (Math.log(N2 + 2) + 2);
         double k3 = (Math.log(N3 + 1) + 1) / (Math.log(N3 + 2) + 2);
@@ -394,7 +394,7 @@ public class Step2
         job.setJarByClass(Step2.class);
         job.setMapperClass(MapperClass.class);
         job.setReducerClass(ReducerClass.class);
-        job.setPartitionerClass(PartitionerClass.class);
+//        job.setPartitionerClass(PartitionerClass.class);
 //        job.setCombinerClass(CombinerClass.class);
 
         job.setOutputKeyClass(Text.class);

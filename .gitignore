@@ -31,8 +31,7 @@ bin/
 .DS_Store
 
 ### input files ###
-1gram_sample.csv
-2gram_sample.csv
-3gram_sample.csv
-googlebooks-heb-all-1gram-20090715-0.csv
-googlebooks-heb-all-3gram-20090715-167.csv
+input/
+
+### output files ###
+output/

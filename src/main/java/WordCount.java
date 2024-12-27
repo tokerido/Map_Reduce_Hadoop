@@ -44,7 +44,12 @@ public class WordCount {
             System.out.println("Processing file: " + currentFileName);
         }
 
-        protected boolean isValuable(String[] words){
+        protected boolean isValuable(String[] words, int nGramSize){
+
+            if (words.length != nGramSize){
+                return false;
+            }
+
             for (String word : words){
                 if (word == null || STOPWORDS.contains(word)){
                     return false;
@@ -57,43 +62,45 @@ public class WordCount {
 
         @Override
         public void map(LongWritable lineId, Text line, Context context) throws IOException, InterruptedException {
-            // Counter globalCounter = context.getCounter("Global", "TotalRows");
 
             String[] fields = line.toString().split("\t");
 
-            if (currentFileName.contains("3gram")) {
-                if (isValuable(fields[0].split(" "))) {
-                    System.out.println("[DEBUG] " + fields[0] + " " + fields[2]);
+            if (fields.length > 0) {
+                String[] words = fields[0].split(" ");
+                if (isValuable(words, words.length)) {
                     context.write(new Text(fields[0]), new Text(fields[2]));
+                    // Increment total words counter for 1-grams
+                    if (words.length == 1) {
+                        context.write(new Text("C0"), new Text(fields[2]));
+                    }
                 }
+            }else{
+                System.out.println("fields length is 0");
             }
-            else if (currentFileName.contains("2gram")) {
-                if (isValuable(fields[0].split(" "))) {
-                    System.out.println("[DEBUG] " + fields[0] + " " + fields[2]);
-                    context.write(new Text(fields[0]), new Text(fields[2]));
-                }
-            }
-            else if (currentFileName.contains("1gram")) {
-                if (isValuable(fields[0].split(" "))) {
-                    System.out.println("[DEBUG] " + fields[0] + " " + fields[2]);
-                    context.write(new Text(fields[0]), new Text(fields[2]));
-                }
-            }
-
         }
     }
 
     public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
 
-//        private MultipleOutputs<Text, Text> multipleOutputs;
+        private MultipleOutputs<Text, Text> multipleOutputs;
+        private long totalWords = 0;
+
 
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
-//            multipleOutputs = new MultipleOutputs<>(context);
+            multipleOutputs = new MultipleOutputs<>(context);
         }
 
         @Override
         public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+
+            if (key.toString().equals("C0")) {
+                for (Text value : values) {
+                    totalWords += Long.parseLong(value.toString());
+                }
+                return;
+            }
+
             String[] words = key.toString().split(" ");
 
             int sum = 0;
@@ -101,24 +108,30 @@ public class WordCount {
                 sum += Integer.parseInt(value.toString());
             }
 
-            String output = "1gram"; // Default
-
+            String output;
             switch (words.length) {
                 case 1:
                     output = "1gram";
+                    break;
                 case 2:
                     output = "2gram";
+                    break;
                 case 3:
                     output = "3gram";
+                    break;
+                default:
+                    output = "1gram"; // Default case
+                    break;
             }
 
-//            multipleOutputs.write(output, key, new Text(Integer.toString(sum)));
-            context.write(key, new Text(Integer.toString(sum)));
+            multipleOutputs.write(output, key, new Text(Integer.toString(sum)));
+//            context.write(key, new Text(Integer.toString(sum)));
         }
 
         @Override
         protected void cleanup(Context context) throws IOException, InterruptedException {
-//            multipleOutputs.close();
+            multipleOutputs.write("1gram", new Text("C0"), new Text(Long.toString(totalWords)));
+            multipleOutputs.close();
         }
     }
 
@@ -133,6 +146,17 @@ public class WordCount {
 
         @Override
         public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+
+
+            if (key.toString().equals("C0")) {
+                long wordTotal = 0;
+                for (Text value : values) {
+                    wordTotal += Long.parseLong(value.toString());
+                }
+                context.write(key, new Text(Long.toString(wordTotal)));
+                return;
+            }
+
             String[] words = key.toString().split(" ");
 
             int sum = 0;
@@ -140,18 +164,24 @@ public class WordCount {
                 sum += Integer.parseInt(value.toString());
             }
 
-            String output = "1gram"; // Default
-
+            String output;
             switch (words.length) {
                 case 1:
                     output = "1gram";
+                    break;
                 case 2:
                     output = "2gram";
+                    break;
                 case 3:
                     output = "3gram";
+                    break;
+                default:
+                    output = "1gram"; // Default case
+                    break;
             }
 
-            //            multipleOutputs.write(output, key, new Text(Integer.toString(sum)));
+
+//            multipleOutputs.write(output, key, new Text(Integer.toString(sum)));
             context.write(key, new Text(Integer.toString(sum)));
         }
 
@@ -165,6 +195,10 @@ public class WordCount {
 
         @Override
         public int getPartition(Text key, Text value, int numPartitions) {
+            if (key.toString().equals("C0")) {
+                return 0; // Send all C0 counts to the same reducer
+            }
+
             // Partition based on the first word
             String w1 = key.toString().split(" ")[0];
             return Math.abs(w1.hashCode() % numPartitions);
@@ -197,6 +231,12 @@ public class WordCount {
 
 //        conf.set("mapreduce.input.fileinputformat.split.maxsize", "128000000");
 
+        // Enable MultipleOutputs
+        MultipleOutputs.addNamedOutput(job, "1gram", TextOutputFormat.class, Text.class, Text.class);
+        MultipleOutputs.addNamedOutput(job, "2gram", TextOutputFormat.class, Text.class, Text.class);
+        MultipleOutputs.addNamedOutput(job, "3gram", TextOutputFormat.class, Text.class, Text.class);
+
+
 //        FileInputFormat.addInputPath(job, new Path(args[1]));
 //        FileOutputFormat.setOutputPath(job, new Path(args[2]));
 
@@ -207,10 +247,7 @@ public class WordCount {
 
 
 
-        // Enable MultipleOutputs
-//        MultipleOutputs.addNamedOutput(job, "1gram", TextOutputFormat.class, Text.class, Text.class);
-//        MultipleOutputs.addNamedOutput(job, "2gram", TextOutputFormat.class, Text.class, Text.class);
-//        MultipleOutputs.addNamedOutput(job, "3gram", TextOutputFormat.class, Text.class, Text.class);
+
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);
 
