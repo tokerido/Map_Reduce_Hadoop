@@ -30,8 +30,9 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-#### input files ###
-#input/
-#
-#### output files ###
+### input files ###
+input/googlebooks-heb-all-1gram-20090715-0.csv
+input/googlebooks-heb-all-3gram-20090715-167.csv
+
+### output files ###
 #output/
