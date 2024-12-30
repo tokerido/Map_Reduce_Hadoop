@@ -17,7 +17,7 @@ public class App {
 
     public static int numberOfInstances = 1;
 
-    public static String jarBucketName = "bucketforjars";
+    public static String jarBucketName = "jarbucket1012";
 
     public static void main(String[]args){
         credentialsProvider = new ProfileCredentialsProvider();
@@ -40,11 +40,21 @@ public class App {
         // Step 1
         HadoopJarStepConfig step1 = new HadoopJarStepConfig()
                 .withJar("s3://" + jarBucketName + "/jars/WordCount.jar")
-                .withMainClass("Step1");
+                .withMainClass("WordCount");
 
         StepConfig stepConfig1 = new StepConfig()
                 .withName("Step1")
                 .withHadoopJarStep(step1)
+                .withActionOnFailure("TERMINATE_JOB_FLOW");
+
+        // Step 1
+        HadoopJarStepConfig step2 = new HadoopJarStepConfig()
+                .withJar("s3://" + jarBucketName + "/jars/Step2.jar")
+                .withMainClass("Step2");
+
+        StepConfig stepConfig2 = new StepConfig()
+                .withName("Step2")
+                .withHadoopJarStep(step2)
                 .withActionOnFailure("TERMINATE_JOB_FLOW");
 
 
@@ -62,7 +72,7 @@ public class App {
         RunJobFlowRequest runFlowRequest = new RunJobFlowRequest()
                 .withName("Map reduce project")
                 .withInstances(instances)
-                .withSteps(stepConfig1)
+                .withSteps(stepConfig1, stepConfig2)
                 .withLogUri("s3://" + jarBucketName + "/logs/")
                 .withServiceRole("EMR_DefaultRole")
                 .withJobFlowRole("EMR_EC2_DefaultRole")

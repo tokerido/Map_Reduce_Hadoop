@@ -19,9 +19,17 @@ import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.lib.output.MultipleOutputs;
 import software.amazon.ion.SystemSymbols;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.conf.Configuration;
+import java.net.URI;
+import java.io.BufferedWriter;
+import java.io.OutputStreamWriter;
 
 public class WordCount {
     public static class MapperClass extends Mapper<LongWritable, Text, Text, Text> {
@@ -43,6 +51,7 @@ public class WordCount {
             FileSplit fileSplit = (FileSplit) context.getInputSplit();
             currentFileName = fileSplit.getPath().getName();
             System.out.println("Processing file: " + currentFileName);
+
         }
 
         protected boolean isValuable(String[] words, int nGramSize){
@@ -71,7 +80,8 @@ public class WordCount {
                 if (isValuable(words, words.length)) {
                     context.write(new Text(fields[0]), new Text(fields[2]));
                     if (words.length == 1) {
-                        context.write(new Text("C0"), new Text(fields[2]));
+//                        context.write(new Text("C0"), new Text(fields[2]));
+                        context.getCounter("CustomGroup", "C0").increment(Integer.parseInt(fields[2]));
                     }
                 }
             }else{
@@ -221,7 +231,7 @@ public class WordCount {
         job.setOutputValueClass(Text.class);
         job.setOutputFormatClass(TextOutputFormat.class);
 
-//        job.setInputFormatClass(SequenceFileInputFormat.class);
+//        job.setInputFormatClass(SequenceFileInputFormat.class);  For S3 Ngram data
         job.setInputFormatClass(TextInputFormat.class);
 
 //        FileInputFormat.addInputPath(job,
@@ -240,45 +250,29 @@ public class WordCount {
 //        FileInputFormat.addInputPath(job, new Path(args[1]));
 //        FileOutputFormat.setOutputPath(job, new Path(args[2]));
 
-        FileInputFormat.addInputPath(job, new Path("/user/local/input/1gram_sample.csv"));
-        FileInputFormat.addInputPath(job, new Path("/user/local/input/2gram_sample.csv"));
-        FileInputFormat.addInputPath(job, new Path("/user/local/input/3gram_sample.csv"));
-        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/input-samples/1gram_sample.csv"));
+        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/input-samples/2gram_sample.csv"));
+        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/input-samples/3gram_sample.csv"));
+//        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+        FileOutputFormat.setOutputPath(job, new Path("s3://jarbucket1012/step1_output/"));
 
+        boolean success = job.waitForCompletion(true);
 
+        if (success) {
+            // Retrieve the counter value
+            long c0Value = job.getCounters()
+                    .findCounter("CustomGroup", "C0")
+                    .getValue();
 
-
-
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
-
-        // if (args.length != 2) {
-        // System.err.println("Usage: WordCount <input path> <output path>");
-        // System.exit(-1);
-        // }
-
-        // Configuration conf = new Configuration();
-        // Job job = Job.getInstance(conf, "Local WordCount");
-
-        // job.setJarByClass(WordCount.class);
-        // job.setMapperClass(MapperClass.class);
-        // job.setReducerClass(ReducerClass.class);
-        // job.setCombinerClass(CombinerClass.class);
-        // job.setPartitionerClass(PartitionerClass.class);
-
-        // // job.setInputFormatClass(TextInputFormat.class);
-        // job.setInputFormatClass(SequenceFileInputFormat.class);
-
-        // job.setOutputKeyClass(Text.class);
-        // job.setOutputValueClass(Text.class);
-
-        // job.setOutputFormatClass(TextOutputFormat.class);
-
-        // // Set the input and output paths from command line arguments
-        // FileInputFormat.addInputPath(job, new Path(args[0]));
-        // FileOutputFormat.setOutputPath(job, new Path(args[1]));
-
-        // System.exit(job.waitForCompletion(true) ? 0 : 1);
-
+            // Write the counter value to the beginning of the file
+            String s3OutputPath = "s3://jarbucket1012/step1_output/part-r-00000"; // S3 location, e.g., "s3://my-bucket/counter-output.txt"
+            FileSystem fs = FileSystem.get(URI.create(s3OutputPath), new Configuration());
+            try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fs.create(new Path(s3OutputPath), true)))) {
+                writer.write("C0 " + c0Value);
+                writer.newLine(); // Add a newline if you plan to append other data later
+            }
+        }
+        System.exit(success ? 0 : 1);
     }
 
 }

@@ -1,4 +1,6 @@
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapreduce.*;
@@ -8,109 +10,64 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
+import java.io.*;
+
+import java.net.URI;
+
+import java.util.Comparator;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 
 public class Step2
 {
-    private static long c0 = -1;
-    // ---------------------------------------------------
-    // 1) A composite key that holds (w1, w2, w3)
-    // ---------------------------------------------------
-    public static class TripletKey implements WritableComparable<TripletKey> {
-        private String w1;
-        private String w2;
-        private String w3;
-
-        public TripletKey() {}
-        public TripletKey(String w1, String w2, String w3) {
-            this.w1 = w1;
-            this.w2 = w2;
-            this.w3 = w3;
-        }
-
-        @Override
-        public void write(DataOutput out) throws IOException {
-            out.writeUTF(w1);
-            out.writeUTF(w2);
-            out.writeUTF(w3);
-        }
-
-        @Override
-        public void readFields(DataInput in) throws IOException {
-            w1 = in.readUTF();
-            w2 = in.readUTF();
-            w3 = in.readUTF();
-        }
-
-        @Override
-        public int compareTo(TripletKey other) {
-            // Standard lexicographic compare by w1, then w2, then w3
-            int cmp = w1.compareTo(other.w1);
-            if (cmp != 0) return cmp;
-            cmp = w2.compareTo(other.w2);
-            if (cmp != 0) return cmp;
-            return w3.compareTo(other.w3);
-        }
-
-        // getters & setters ...
-        public String getW1() { return w1; }
-        public String getW2() { return w2; }
-        public String getW3() { return w3; }
-    }
-
-    // ---------------------------------------------------
-    // 2) The "tagged value" that the mapper emits
-    // ---------------------------------------------------
     public static class TaggedValue implements Writable {
         private Text tag;    // e.g. "1GRAM", "2GRAM", "3GRAM", "C0"
         private LongWritable count;  // the numeric count
         // Possibly store which position(s) this belongs to (for 2-gram or 1-gram).
         // But let's keep it simple and store the original token(s) as needed.
-        private Text extra;  // e.g. store "w1_w2" or "w" if needed
+        private Text nGram;  // e.g. store "w1_w2" or "w" if needed
 
         public TaggedValue() {
             this.tag = new Text();
             this.count = new LongWritable(0);
-            this.extra = new Text();
+            this.nGram = new Text();
         }
 
         public TaggedValue(String tag, long count, String extra) {
             this.tag = new Text(tag);
             this.count = new LongWritable(count);
-            this.extra = new Text(extra);
+            this.nGram = new Text(extra);
         }
 
         @Override
         public void write(DataOutput out) throws IOException {
             tag.write(out);
             count.write(out);
-            extra.write(out);
+            nGram.write(out);
         }
 
         @Override
         public void readFields(DataInput in) throws IOException {
             tag.readFields(in);
             count.readFields(in);
-            extra.readFields(in);
+            nGram.readFields(in);
         }
 
         public Text getTag() { return tag; }
         public LongWritable getCount() { return count; }
-        public Text getExtra() { return extra; }
+        public Text getNGram() { return nGram; }
     }
 
-    public static class MapperClass extends Mapper<LongWritable, Text, TripletKey, TaggedValue> {
+    public static class MapperClass extends Mapper<LongWritable, Text, Text, TaggedValue> {
         private boolean is1GramFile = false;
         private boolean is2GramFile = false;
         private boolean is3GramFile = false;
 
-        // One approach: use different input paths or
-        // set a config property telling us which file we're mapping
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
             // In a real job, you might pass a parameter or
@@ -137,311 +94,159 @@ public class Step2
                     String w3 = fields[2];
                     long n3 = Long.parseLong(fields[3]);
 
-                    // Key = (w1, w2, w3)
-                    TripletKey outKey = new TripletKey(w1, w2, w3);
-                    // Value = (tag="3GRAM", count=n3, extra="")
-                    TaggedValue outVal = new TaggedValue("3GRAM", n3, "");
-                    context.write(outKey, outVal);
+                    // Key = w2
+                    Text outKey2 = new Text(w2);
+                    // Value = (tag="3GRAM", count=n3, nGram="")
+                    TaggedValue outVal2 = new TaggedValue("3GRAM", n3, String.format("%s %s %s", w1, w2, w3));
+                    context.write(outKey2, outVal2);
+
+                    // Key = w3
+                    Text outKey3 = new Text(w3);
+                    // Value = (tag="3GRAM", count=n3, nGram="")
+                    TaggedValue outVal3 = new TaggedValue("3GRAM", n3, String.format("%s %s %s", w1, w2, w3));
+                    context.write(outKey3, outVal3);
                 }
             }
             else if (is2GramFile) {
                 // Format: wA wB N2
                 if (fields.length == 3) {
-                    String wA = fields[0];
-                    String wB = fields[1];
+                    String w1 = fields[0];
+                    String w2 = fields[1];
                     long count = Long.parseLong(fields[2]);
 
-                    // We need to contribute to BOTH:
-                    //   - (wA, wB, ANY) => this is the 3-gram key w1=wA, w2=wB, w3=?
-                    //   - (ANY, wA, wB) => this might be the 3-gram key w1=?, w2=wA, w3=wB
-                    //
-                    // In principle, we might replicate this record for *every possible w3*
-                    // or *every possible w1*, but that can be huge. We'll show a smaller approach:
-                    // We'll produce partial keys with asterisks to rely on a custom grouping comparator.
-                    // For example:
-                    TripletKey outKey1 = new TripletKey(wA, wB, "*");
-                    TaggedValue outVal1 = new TaggedValue("2GRAM", count, "POS12");  //C2
-                    context.write(outKey1, outVal1);
-
-                    TripletKey outKey2 = new TripletKey("*", wA, wB);
-                    TaggedValue outVal2 = new TaggedValue("2GRAM", count, "POS23");   //N2
-                    context.write(outKey2, outVal2);
+                    Text outKey = new Text(w2);
+                    TaggedValue outVal = new TaggedValue("2GRAM", count, String.format("%s %s", w1, w2));   //N2
+                    context.write(outKey, outVal);
                 }
             }
             else if (is1GramFile) {
-                // Format: wC N1 OR "C0 totalCount"
                 if (fields.length == 2) {
-                    if (fields[0].equals("C0")) {
-                        c0 = Long.parseLong(fields[1]);
-                        // We'll broadcast this to a wildcard key
-                        TripletKey outKey = new TripletKey("*", "*", "*");
-                        TaggedValue outVal = new TaggedValue("C0", c0, "");
-                        context.write(outKey, outVal);
-                    } else {
-                        String wC = fields[0];
+                    if (!fields[0].equals("C0")) {
+
+                        String w1 = fields[0];
                         long n1 = Long.parseLong(fields[1]);
 
-                        // For a single word wC, it might appear as w1, w2, or w3
-                        // We'll replicate:
+                        Text outKey = new Text(w1);
+                        context.write(outKey, new TaggedValue("1GRAM", n1, String.format("%s", w1) ));
 
-                        TripletKey k2 = new TripletKey("*", wC, "*");  // w2 = wC
-                        context.write(k2, new TaggedValue("1GRAM", n1, "POS2"));
-
-//                        TripletKey k3 = new TripletKey("*", "*", wC);  // w3 = wC
-//                        context.write(k3, new TaggedValue("1GRAM", n1, "POS3"));
                     }
                 }
             }
         }
     }
 
-    public static class ReducerClass extends Reducer<TripletKey, TaggedValue, Text, NullWritable> {
+    public static class CustomValueComparator implements Comparator<TaggedValue> {
+        @Override
+        public int compare(TaggedValue tv1, TaggedValue tv2) {
+            // Example: Prioritize by tag order (1GRAM > 2GRAM > 3GRAM), then by count descending
+            String tag1 = tv1.getTag().toString();
+            String tag2 = tv2.getTag().toString();
 
-//        protected void
+            int tagComparison = tag1.compareTo(tag2);
+            if (tagComparison != 0) {
+                return tagComparison; // Sort by tag
+            }
 
-        long n3 = 0;
+            // If tags are the same, sort by count (descending)
+            return Long.compare(tv2.getCount().get(), tv1.getCount().get());
+        }
+    }
+
+    public static class ReducerClass extends Reducer<Text, TaggedValue, Text, Text> {
+
+        public long C0;
 
         // For 1-grams:
-        long n1_w1 = 0;
-        long n1_w2 = 0;
-        long n1_w3 = 0;
+        public long NorC1 = 0;
 
         // For 2-grams:
-        long n2_w1w2 = 0;
-        long n2_w2w3 = 0;
+        public long NorC2 = 0;
 
-        String w2;
+        // For 3-grams:
+        public long N3 = 0;
+        public String gram = "";
 
         @Override
-        protected void reduce(TripletKey key, Iterable<TaggedValue> values, Context context)
+        protected void setup(Reducer.Context context) throws IOException, InterruptedException {
+            C0 = Long.parseLong(context.getConfiguration().get("C0"));
+        }
+
+        @Override
+        protected void reduce(Text key, Iterable<TaggedValue> values, Context context)
                 throws IOException, InterruptedException {
 
-            context.write(new Text("Started Reducer"), NullWritable.get());
-            context.write(new Text(String.format("%s %s %s", key.getW1(), key.getW2(), key.getW3())), NullWritable.get());
+//            context.write(new Text("Started Reducer"), new Text(""));
+//            context.write(new Text(String.format("Key: %s", key.toString())), new Text(""));
 
-
-            // We'll gather partial data here:
-            // We might have multiple 1-gram counts for w1, w2, w3, multiple 2-gram counts, etc.
-
-
-
-            // We only want to output a final line if this key is a "real" 3-gram
-            // i.e. key != (*, something, something) etc.  We'll check later.
             boolean has3Gram = false;
 
 
             for (TaggedValue tv : values) {
                 String tag = tv.getTag().toString();
                 long count = tv.getCount().get();
-                String extra = tv.getExtra().toString();
+                String nGram = tv.getNGram().toString();
 //                context.write(new Text(String.format("tag: %s, count: %d, extra: %s", tag, count, extra)), NullWritable.get());
 
-                if (tag.equals("3GRAM")) {
+                switch (tag) {
+                    case "3GRAM" :
 //                    context.write(new Text("Entered 3GRAM"), NullWritable.get());
-                    n3 = count;
-                    has3Gram = true;
-                }
-                else if (tag.equals("2GRAM")) {
+                        N3 = count;
+                        has3Gram = true;
+                        gram = nGram;
+
+                        String[] words = gram.split(" ");
+                        if (key.toString().equals(words[1])){ // W2 was the key
+                            context.write(new Text(gram), new Text(String.format("C0:%s C1:%d C2:%d N3:%d", C0, NorC1, NorC2, N3)));
+                            NorC2 = 0;
+                        } else { // W3 was the key
+                            context.write(new Text(gram), new Text(String.format("C0:%s N1:%d N2:%d N3:%d", C0, NorC1, NorC2, N3)));
+                        }
+
+
+                        break;
+
+                    case "2GRAM" :
 //                    context.write(new Text("Entered 2GRAM"), NullWritable.get());
-                    // "POS12" => means this is for (w1,w2,*)
-                    // "POS23" => means this is for (*,w2,w3)
-                    if (extra.equals("POS12")) {
-//                        context.write(new Text("Entered 2GRAM POS12"), NullWritable.get());
-                        // (key.w1, key.w2, "*")
-                        n2_w1w2 = count;
-                    } else if (extra.equals("POS23")) {
-//                        context.write(new Text("Entered 2GRAM POS23"), NullWritable.get());
-                        // ( "*", key.w2, key.w3)
-                        n2_w2w3 = count;
-                    }
-                }
-                else if (tag.equals("1GRAM")) {
+                        NorC2 = count;
+                        break;
+
+                    case "1GRAM" :
 //                    context.write(new Text("Entered 1GRAM"), NullWritable.get());
-                    // "POS1" => (w1, *, *) => n1 for w1
-                    // "POS2" => (*, w2, *) => n1 for w2
-                    // "POS3" => (*, *, w3) => n1 for w3
-                    if (extra.equals("POS1")) {
-//                        context.write(new Text("Entered 1GRAM POS1"), NullWritable.get());
-                        n1_w1 = count;
-                    } else if (extra.equals("POS2")) {
-//                        context.write(new Text("Entered 1GRAM POS2"), NullWritable.get());
-                        n1_w2 = count;
-                    } else if (extra.equals("POS3")) {
-//                        context.write(new Text("Entered 1GRAM POS3"), NullWritable.get());
-                        n1_w3 = count;
-                    }
-                }
-                else if (tag.equals("C0")) {
-//                    context.write(new Text("Entered C0"), NullWritable.get());
-                    c0 = count;
+                        NorC1 = count;
+                        break;
+
                 }
             } // end for
-
-            // Now decide if we want to emit a final record. Typically,
-            // we only have a "real" 3-gram if w1 != "*" and w2 != "*" and w3 != "*"
-            // and has3Gram == true.
-            String w1 = key.getW1();
-            String w2 = key.getW2();
-            String w3 = key.getW3();
-
-            if (has3Gram && !w1.equals("*") && !w2.equals("*") && !w3.equals("*")) {
+            if (has3Gram) {
 //                double k2 = (Math.log(n2_w2w3 + 1) + 1) / (Math.log(n2_w2w3 + 1) + 2);
 //                double k3 = (Math.log(n3 + 1) + 1) / (Math.log(n3 + 1) + 2);
 //                double prob = k3 * (n3/n2_w1w2) + (1 - k3)*k2*(n2_w2w3/n1_w2) + (1 - k3)*(1 - k2)*(n1_w3/c0);
-
-
-                context.write(new Text(String.format("%s %s %s ## n3: %d, n2_w1w2: %d, n2_w2w3: %d, n1_w1: %d, n1_w2: %d, n1_w3: %d, c0: %d", w1, w2, w3, n3, n2_w1w2, n2_w2w3, n1_w1, n1_w2, n1_w3, c0)), NullWritable.get());
-
-                n3 = 0;
-
-                // For 1-grams:
-                n1_w1 = 0;
-                n1_w2 = 0;
-                n1_w3 = 0;
-
-                // For 2-grams:
-                n2_w1w2 = 0;
-                n2_w2w3 = 0;
+//                String[] words = gram.split(" ");
+//                String c0 = context.getConfiguration().get("C0");
+//                if (key.toString().equals(words[1])){ // W2 was the key
+//                    context.write(new Text(gram), new Text(String.format("C0:%s C1:%d C2:%d N3:%d", c0, NorC1, NorC2, N3)));
+//                } else { // W3 was the key
+//                    context.write(new Text(gram), new Text(String.format("C0:%s N1:%d N2:%d N3:%d", c0, NorC1, NorC2, N3)));
+//                }
             }
         }
     }
 
-    public static class PartitionerClass extends Partitioner<TripletKey, TaggedValue> {
+    public static class PartitionerClass extends Partitioner<Text, TaggedValue> {
         @Override
-        public int getPartition(TripletKey key, TaggedValue value, int numPartitions) {
+        public int getPartition(Text key, TaggedValue value, int numPartitions) {
             // Let's define "canonical" w1, w2, w3 for partitioning:
             // if w1 != "", use w1; otherwise use w2; if w2 != "", etc...
             // That can get complicated. A simpler approach might just do:
 
 //            String p1 = key.getW1().equals("") ? "" : key.getW1();
-            String p2 = key.getW2().equals("*") ? "*" : key.getW2();
+//            String p2 = key.getW2().equals("*") ? "*" : key.getW2();
 //            String p3 = key.getW3().equals("*") ? "" : key.getW3();
 
 //            String combined = p1 + "#" + p2 + "#" + p3;
-            return Math.abs(p2.hashCode() % numPartitions);
+            return Math.abs(key.toString().hashCode() % numPartitions);
         }
     }
-
-    public static class TripletGroupingComparator extends WritableComparator {
-        protected TripletGroupingComparator() {
-            super(TripletKey.class, true);
-        }
-
-        @Override
-        public int compare(WritableComparable a, WritableComparable b) {
-            TripletKey k1 = (TripletKey) a;
-            TripletKey k2 = (TripletKey) b;
-
-            // We'll say two keys are in the same group if
-            // for each position w1/w2/w3, either the strings match
-            // or at least one of them is "".
-
-            int c2 = compareWithStar(k1.getW2(), k2.getW2());
-            if (c2 != 0) return c2;
-            int c1 = compareWithStar(k1.getW1(), k2.getW1());
-            if (c1 != 0) return c1;
-            return compareWithStar(k1.getW3(), k2.getW3());
-        }
-
-        private int compareWithStar(String s1, String s2) {
-            if (s1.equals(s2)) {
-                return 0;
-            } else if (s1.equals("*") || s2.equals("*")) {
-                // treat them as equal => same group
-                return 0;
-            } else {
-                // if both are real words and different, define an order
-                return s1.compareTo(s2);
-            }
-        }
-    }
-
-//    public static class MapperClass extends Mapper<LongWritable, Text, Text, Text> {
-
-    //        public static int C0 = -1;
-//
-//        @Override
-//        protected void setup(Context context) {
-//        }
-//
-//        public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-//            String line = value.toString();
-//            String[] parts = line.split("\t");
-//            if (parts.length != 2) return;
-//
-//            String nGram = parts[0].trim(); // e.g., "* w *" or "w q s"
-//            String countInfo = parts[1].trim(); // Count value
-//
-//            String[] words = nGram.split(" ");
-//
-//            if (nGram.equals("* C0 *")) {
-//                // Corpus size
-//                context.write(new Text("BROADCAST"), new Text("C0:" + countInfo));
-//            } else if (nGram.startsWith("*") && nGram.endsWith("*")) {
-//                // Unigram count for w
-//                context.write(new Text(words[1] + ":UNIGRAM"), new Text("C1:" + countInfo));
-//            } else if (nGram.endsWith("*")) {
-//                // Bigram count <w, q>
-//                context.write(new Text(words[0] + "," + words[1] + ":BIGRAM"), new Text("C2:" + countInfo));
-//            } else if (nGram.startsWith("*")) {
-//                // Bigram count <q, s>
-//                context.write(new Text(words[1] + "," + words[2] + ":BIGRAM"), new Text("N2:" + countInfo));
-//            } else if (words.length == 3) {
-//                // Trigram count <w, q, s>
-//                context.write(new Text(words[0] + "," + words[1] + "," + words[2]), new Text("N3:" + countInfo));
-//            }
-//        }
-//    }
-//
-//    public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
-//
-//        public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-//            int C0 = 0, C1 = 0, C2 = 0, N1 = 0, N2 = 0, N3 = 0;
-//
-//            for (Text value : values) {
-//                String[] parts = value.toString().split(":");
-//                String countType = parts[0];
-//                int count = Integer.parseInt(parts[1]);
-//
-//                switch (countType) {
-//                    case "C0":
-//                        C0 = count;
-//                        break;
-//                    case "C1":
-//                        C1 = count;
-//                        break;
-//                    case "C2":
-//                        C2 = count;
-//                        break;
-//                    case "N1":
-//                        N1 = count;
-//                        break;
-//                    case "N2":
-//                        N2 = count;
-//                        break;
-//                    case "N3":
-//                        N3 = count;
-//                        break;
-//                }
-//            }
-//
-//            // Emit trigram and its associated counts
-//            context.write(key, new Text("C0:" + C0 + " C1:" + C1 + " C2:" + C2 + " N1:" + N1 + " N2:" + N2 + " N3:" + N3));
-//        }
-//    }
-//
-////    public static class CombinerClass extends Reducer<Text, IntWritable, Text, IntWritable> {
-//
-    ////        public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
-    ////            int sum = 0;
-    ////            for (IntWritable value : values) {
-    ////                sum += value.get();
-    ////            }
-    ////            context.write(key, new IntWritable(sum));
-    ////
-    ////        }
-    ////    }
-//
 
     public static void calculateProbabilities(double N1, double N2, double N3, double C0, double C1,double C2) {
 
@@ -455,24 +260,64 @@ public class Step2
     public static void main(String[] args) throws Exception {
         System.out.println("[DEBUG] STEP 2 started!");
         System.out.println(args.length > 0 ? args[0] : "no args");
+
+        String s3InputPath = "s3a://jarbucket1012/step1_output/part-r-00000"; // S3 location, e.g., "s3://my-bucket/counter-output.txt"
+        FileSystem fs = FileSystem.get(URI.create(s3InputPath), new Configuration());
+        String c0Value = null;
+
+
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(new Path(s3InputPath))))) {
+            // Read the first line only
+            String line = reader.readLine();
+            if (line != null && line.startsWith("C0")) {
+                c0Value = line.split(" ")[1]; // Extract the value
+            }
+        }
+
+        if (c0Value == null) {
+            throw new RuntimeException("Counter value for C0 not found in the file!");
+        }
+
+        System.out.println("C0 =" + c0Value);
+
         Configuration conf = new Configuration();
+        conf.set("C0", c0Value);
+        // Add the C0 file to the distributed cache
+
+
+//        String c0 = "";
+//        Path input_1gram = new Path("s3://jarbucket1012/input-samples/output_test_1gram");  // Path to the file from Step1
+//        FileSystem fs = FileSystem.get(conf);
+//        FSDataInputStream in = fs.open(input_1gram);
+//        BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+//        String line;
+//        while ((line = reader.readLine()) != null) {
+//            if (line.startsWith("C0")) {
+//                c0 = line.split("\t")[1];
+//                break;
+//            }
+//        }
+//        reader.close();
+
+//        conf.set("C0:", c0);
+
         Job job = Job.getInstance(conf, "Step2");
 
         job.setJarByClass(Step2.class);
         job.setMapperClass(MapperClass.class);
         job.setReducerClass(ReducerClass.class);
         job.setPartitionerClass(PartitionerClass.class);
-        job.setGroupingComparatorClass(TripletGroupingComparator.class);
 //        job.setCombinerClass(CombinerClass.class);
 
-        job.setMapOutputKeyClass(TripletKey.class);
+        job.setMapOutputKeyClass(Text.class);
         job.setMapOutputValueClass(TaggedValue.class);
 
         job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(NullWritable.class);
+        job.setOutputValueClass(Text.class);
         job.setOutputFormatClass(TextOutputFormat.class);
 
-//        job.setInputFormatClass(SequenceFileInputFormat.class);
+//        job.setInputFormatClass(SequenceFileInputFormat.class);  // For S3 N-gram data
         job.setInputFormatClass(TextInputFormat.class);
 
 //        job.setNumReduceTasks(4);
@@ -485,41 +330,14 @@ public class Step2
 //        conf.set("mapreduce.input.fileinputformat.split.maxsize", "128000000");
 
 //        FileInputFormat.addInputPath(job, new Path(args[1]));
-        FileInputFormat.addInputPath(job, new Path("/user/local/input/output_test_1gram"));
-        FileInputFormat.addInputPath(job, new Path("/user/local/input/output_test_2gram"));
-        FileInputFormat.addInputPath(job, new Path("/user/local/input/3gram_test"));
-        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+//        FileInputFormat.addInputPath(job, input_1gram);
+//        FileInputFormat.addInputPath(job, new Path("/user/local/input/output_test_2gram"));
+//        FileInputFormat.addInputPath(job, new Path("/user/local/input/output_test_3gram"));
+//        FileOutputFormat.setOutputPath(job, new Path(args[1]));
 
+        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/step1_output/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://jarbucket1012/step2_output/"));
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);
-
-        // if (args.length != 2) {
-        // System.err.println("Usage: WordCount <input path> <output path>");
-        // System.exit(-1);
-        // }
-
-        // Configuration conf = new Configuration();
-        // Job job = Job.getInstance(conf, "Local WordCount");
-
-        // job.setJarByClass(WordCount.class);
-        // job.setMapperClass(MapperClass.class);
-        // job.setReducerClass(ReducerClass.class);
-        // job.setCombinerClass(CombinerClass.class);
-        // job.setPartitionerClass(PartitionerClass.class);
-
-        // // job.setInputFormatClass(TextInputFormat.class);
-        // job.setInputFormatClass(SequenceFileInputFormat.class);
-
-        // job.setOutputKeyClass(Text.class);
-        // job.setOutputValueClass(Text.class);
-
-        // job.setOutputFormatClass(TextOutputFormat.class);
-
-        // // Set the input and output paths from command line arguments
-        // FileInputFormat.addInputPath(job, new Path(args[0]));
-        // FileOutputFormat.setOutputPath(job, new Path(args[1]));
-
-        // System.exit(job.waitForCompletion(true) ? 0 : 1);
-
     }
 }
