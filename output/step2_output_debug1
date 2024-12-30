@@ -1,0 +1,119 @@
+Started Reducer
+* * *
+Entered C0
+Started Reducer
+* ארצה *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* גבו *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* הערה *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* הערה קצרה
+Entered 2GRAM
+Entered 2GRAM POS23
+Started Reducer
+* זהותו *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* כזה *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* להסתדרות *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* להסתדרות מאחורי
+Entered 2GRAM
+Entered 2GRAM POS23
+Started Reducer
+* להסתתר *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* להסתתר מאחורי
+Entered 2GRAM
+Entered 2GRAM POS23
+Started Reducer
+* להעביר *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* להעביר ארצה
+Entered 2GRAM
+Entered 2GRAM POS23
+Started Reducer
+* להעיר *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* להעיר הערה
+Entered 2GRAM
+Entered 2GRAM POS23
+Started Reducer
+* להעלות *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* להעלים *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* מאחורי *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+* מאחורי גבו
+Entered 2GRAM
+Entered 2GRAM POS23
+Started Reducer
+* קצרה *
+Entered 1GRAM
+Entered 1GRAM POS2
+Started Reducer
+הערה קצרה *
+Entered 2GRAM
+Entered 2GRAM POS12
+Started Reducer
+להסתדרות לפני גבו
+Entered 3GRAM
+להסתדרות לפני גבו ## n3: 32, n2_w1w2: 0, n2_w2w3: 0, n1_w1: 0, n1_w2: 0, n1_w3: 0, c0: 0
+Started Reducer
+להסתדרות מאחורי *
+Entered 2GRAM
+Entered 2GRAM POS12
+Started Reducer
+להסתדרות מאחורי גבו
+Entered 3GRAM
+להסתדרות מאחורי גבו ## n3: 70, n2_w1w2: 0, n2_w2w3: 0, n1_w1: 0, n1_w2: 0, n1_w3: 0, c0: 0
+Started Reducer
+להסתתר מאחורי *
+Entered 2GRAM
+Entered 2GRAM POS12
+Started Reducer
+להסתתר מאחורי גבו
+Entered 3GRAM
+להסתתר מאחורי גבו ## n3: 58, n2_w1w2: 0, n2_w2w3: 0, n1_w1: 0, n1_w2: 0, n1_w3: 0, c0: 0
+Started Reducer
+להעביר ארצה *
+Entered 2GRAM
+Entered 2GRAM POS12
+Started Reducer
+להעיר הערה *
+Entered 2GRAM
+Entered 2GRAM POS12
+Started Reducer
+להעיר הערה קצרה
+Entered 3GRAM
+להעיר הערה קצרה ## n3: 54, n2_w1w2: 0, n2_w2w3: 0, n1_w1: 0, n1_w2: 0, n1_w3: 0, c0: 0
+Started Reducer
+מאחורי גבו *
+Entered 2GRAM
+Entered 2GRAM POS12

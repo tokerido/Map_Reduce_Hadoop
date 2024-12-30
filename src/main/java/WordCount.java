@@ -1,4 +1,5 @@
 
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 //import org.apache.hadoop.io.IntWritable;
@@ -69,7 +70,6 @@ public class WordCount {
                 String[] words = fields[0].split(" ");
                 if (isValuable(words, words.length)) {
                     context.write(new Text(fields[0]), new Text(fields[2]));
-                    // Increment total words counter for 1-grams
                     if (words.length == 1) {
                         context.write(new Text("C0"), new Text(fields[2]));
                     }
@@ -164,21 +164,21 @@ public class WordCount {
                 sum += Integer.parseInt(value.toString());
             }
 
-            String output;
-            switch (words.length) {
-                case 1:
-                    output = "1gram";
-                    break;
-                case 2:
-                    output = "2gram";
-                    break;
-                case 3:
-                    output = "3gram";
-                    break;
-                default:
-                    output = "1gram"; // Default case
-                    break;
-            }
+//            String output;
+//            switch (words.length) {
+//                case 1:
+//                    output = "1gram";
+//                    break;
+//                case 2:
+//                    output = "2gram";
+//                    break;
+//                case 3:
+//                    output = "3gram";
+//                    break;
+//                default:
+//                    output = "1gram"; // Default case
+//                    break;
+//            }
 
 
 //            multipleOutputs.write(output, key, new Text(Integer.toString(sum)));
@@ -282,3 +282,4 @@ public class WordCount {
     }
 
 }
+

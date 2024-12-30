@@ -30,8 +30,8 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-### input files ###
-input/
-
-### output files ###
-output/
+#### input files ###
+#input/
+#
+#### output files ###
+#output/
