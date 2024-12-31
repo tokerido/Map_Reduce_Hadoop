@@ -95,16 +95,16 @@ public class Step2
                     long n3 = Long.parseLong(fields[3]);
 
                     // Key = w2
-                    Text outKey2 = new Text(w2);
+//                    Text outKey2 = new Text(w2);
                     // Value = (tag="3GRAM", count=n3, nGram="")
-                    TaggedValue outVal2 = new TaggedValue("3GRAM", n3, String.format("%s %s %s", w1, w2, w3));
-                    context.write(outKey2, outVal2);
+                    TaggedValue outVal2 = new TaggedValue("3GRAM-2", n3, String.format("%s %s %s", w1, w2, w3));
+                    context.write(new Text(String.format("%s %s %s", w2, w1, w3)), outVal2);
 
                     // Key = w3
-                    Text outKey3 = new Text(w3);
+//                    Text outKey3 = new Text(w3);
                     // Value = (tag="3GRAM", count=n3, nGram="")
-                    TaggedValue outVal3 = new TaggedValue("3GRAM", n3, String.format("%s %s %s", w1, w2, w3));
-                    context.write(outKey3, outVal3);
+                    TaggedValue outVal3 = new TaggedValue("3GRAM-3", n3, String.format("%s %s %s", w1, w2, w3)); // CHANGE IN THE WORD ORDER!
+                    context.write(new Text(String.format("%s %s %s", w3, w2, w1)), outVal3);
                 }
             }
             else if (is2GramFile) {
@@ -114,9 +114,9 @@ public class Step2
                     String w2 = fields[1];
                     long count = Long.parseLong(fields[2]);
 
-                    Text outKey = new Text(w2);
-                    TaggedValue outVal = new TaggedValue("2GRAM", count, String.format("%s %s", w1, w2));   //N2
-                    context.write(outKey, outVal);
+//                    Text outKey = new Text(w2);
+                    TaggedValue outVal = new TaggedValue("2GRAM", count, String.format("%s %s", w1, w2));
+                    context.write(new Text(String.format("%s %s *",w2 ,w1)), outVal);
                 }
             }
             else if (is1GramFile) {
@@ -126,8 +126,8 @@ public class Step2
                         String w1 = fields[0];
                         long n1 = Long.parseLong(fields[1]);
 
-                        Text outKey = new Text(w1);
-                        context.write(outKey, new TaggedValue("1GRAM", n1, String.format("%s", w1) ));
+//                        Text outKey = new Text(w1);
+                        context.write(new Text(String.format("%s * *", w1)), new TaggedValue("1GRAM", n1, String.format("%s", w1) ));
 
                     }
                 }
@@ -138,17 +138,22 @@ public class Step2
     public static class CustomValueComparator implements Comparator<TaggedValue> {
         @Override
         public int compare(TaggedValue tv1, TaggedValue tv2) {
-            // Example: Prioritize by tag order (1GRAM > 2GRAM > 3GRAM), then by count descending
+            // Extract tags and nGrams
             String tag1 = tv1.getTag().toString();
             String tag2 = tv2.getTag().toString();
+            String nGram1 = tv1.getNGram().toString();
+            String nGram2 = tv2.getNGram().toString();
 
-            int tagComparison = tag1.compareTo(tag2);
-            if (tagComparison != 0) {
-                return tagComparison; // Sort by tag
+            // Rule 1: `1GRAM` always comes first
+            if (tag1.equals("1GRAM") && !tag2.equals("1GRAM")) {
+                return -1; // tv1 (1GRAM) comes first
+            }
+            if (!tag1.equals("1GRAM") && tag2.equals("1GRAM")) {
+                return 1; // tv2 (1GRAM) comes first
             }
 
-            // If tags are the same, sort by count (descending)
-            return Long.compare(tv2.getCount().get(), tv1.getCount().get());
+            // Rule 2: For other tags, sort alphabetically by nGram
+            return nGram1.compareTo(nGram2);
         }
     }
 
@@ -162,10 +167,6 @@ public class Step2
         // For 2-grams:
         public long NorC2 = 0;
 
-        // For 3-grams:
-        public long N3 = 0;
-        public String gram = "";
-
         @Override
         protected void setup(Reducer.Context context) throws IOException, InterruptedException {
             C0 = Long.parseLong(context.getConfiguration().get("C0"));
@@ -175,60 +176,44 @@ public class Step2
         protected void reduce(Text key, Iterable<TaggedValue> values, Context context)
                 throws IOException, InterruptedException {
 
-//            context.write(new Text("Started Reducer"), new Text(""));
-//            context.write(new Text(String.format("Key: %s", key.toString())), new Text(""));
-
-            boolean has3Gram = false;
-
+//            context.write(new Text("\nStarted Reducer"), new Text(""));
+//            context.write(new Text(String.format("Key: %s\n", key.toString())), new Text(""));
 
             for (TaggedValue tv : values) {
+
                 String tag = tv.getTag().toString();
                 long count = tv.getCount().get();
                 String nGram = tv.getNGram().toString();
-//                context.write(new Text(String.format("tag: %s, count: %d, extra: %s", tag, count, extra)), NullWritable.get());
+
+//                context.write(new Text(String.format("tag: %s, count: %d, nGram: %s", tag, count, nGram)), new Text(""));
 
                 switch (tag) {
-                    case "3GRAM" :
-//                    context.write(new Text("Entered 3GRAM"), NullWritable.get());
-                        N3 = count;
-                        has3Gram = true;
-                        gram = nGram;
+                    case "3GRAM-2" : // W2 case
+//                        context.write(new Text("Entered 3GRAM-2"), new Text(""));
 
-                        String[] words = gram.split(" ");
-                        if (key.toString().equals(words[1])){ // W2 was the key
-                            context.write(new Text(gram), new Text(String.format("C0:%s C1:%d C2:%d N3:%d", C0, NorC1, NorC2, N3)));
-                            NorC2 = 0;
-                        } else { // W3 was the key
-                            context.write(new Text(gram), new Text(String.format("C0:%s N1:%d N2:%d N3:%d", C0, NorC1, NorC2, N3)));
-                        }
+                        context.write(new Text(nGram), new Text(String.format("C0:%s C1:%d C2:%d N3:%d", C0, NorC1, NorC2, count)));
+                        break;
 
+                    case "3GRAM-3": // W3 case
+//                        context.write(new Text("Entered 3GRAM-3"), new Text(""));
 
+//                        String[] words = nGram.split(" ");
+//                        context.write(new Text(String.format("%s %s %s", words[2], words[0], words[1])), new Text(String.format("C0:%s N1:%d N2:%d N3:%d", C0, NorC1, NorC2, count)));
+                        context.write(new Text(nGram), new Text(String.format("C0:%s N1:%d N2:%d N3:%d", C0, NorC1, NorC2, count)));
                         break;
 
                     case "2GRAM" :
-//                    context.write(new Text("Entered 2GRAM"), NullWritable.get());
+//                        context.write(new Text("Entered 2GRAM"), new Text(""));
                         NorC2 = count;
                         break;
 
                     case "1GRAM" :
-//                    context.write(new Text("Entered 1GRAM"), NullWritable.get());
+//                        context.write(new Text("Entered 1GRAM"), new Text(""));
                         NorC1 = count;
                         break;
 
                 }
             } // end for
-            if (has3Gram) {
-//                double k2 = (Math.log(n2_w2w3 + 1) + 1) / (Math.log(n2_w2w3 + 1) + 2);
-//                double k3 = (Math.log(n3 + 1) + 1) / (Math.log(n3 + 1) + 2);
-//                double prob = k3 * (n3/n2_w1w2) + (1 - k3)*k2*(n2_w2w3/n1_w2) + (1 - k3)*(1 - k2)*(n1_w3/c0);
-//                String[] words = gram.split(" ");
-//                String c0 = context.getConfiguration().get("C0");
-//                if (key.toString().equals(words[1])){ // W2 was the key
-//                    context.write(new Text(gram), new Text(String.format("C0:%s C1:%d C2:%d N3:%d", c0, NorC1, NorC2, N3)));
-//                } else { // W3 was the key
-//                    context.write(new Text(gram), new Text(String.format("C0:%s N1:%d N2:%d N3:%d", c0, NorC1, NorC2, N3)));
-//                }
-            }
         }
     }
 
@@ -248,24 +233,22 @@ public class Step2
         }
     }
 
-    public static void calculateProbabilities(double N1, double N2, double N3, double C0, double C1,double C2) {
-
-        double k2 = (Math.log(N2 + 1) + 1) / (Math.log(N2 + 2) + 2);
-        double k3 = (Math.log(N3 + 1) + 1) / (Math.log(N3 + 2) + 2);
-
-        double prob = k3 * (N3/C2) + (1 - k3)*k2*(N2/N1);
-
-    }
+//    public static void calculateProbabilities(double N1, double N2, double N3, double C0, double C1,double C2) {
+//
+//        double k2 = (Math.log(N2 + 1) + 1) / (Math.log(N2 + 2) + 2);
+//        double k3 = (Math.log(N3 + 1) + 1) / (Math.log(N3 + 2) + 2);
+//
+//        double prob = k3 * (N3/C2) + (1 - k3)*k2*(N2/N1);
+//
+//    }
 
     public static void main(String[] args) throws Exception {
         System.out.println("[DEBUG] STEP 2 started!");
-        System.out.println(args.length > 0 ? args[0] : "no args");
+//        System.out.println(args.length > 0 ? args[0] : "no args");
 
         String s3InputPath = "s3a://jarbucket1012/step1_output/part-r-00000"; // S3 location, e.g., "s3://my-bucket/counter-output.txt"
         FileSystem fs = FileSystem.get(URI.create(s3InputPath), new Configuration());
         String c0Value = null;
-
-
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(new Path(s3InputPath))))) {
             // Read the first line only
@@ -307,7 +290,7 @@ public class Step2
         job.setJarByClass(Step2.class);
         job.setMapperClass(MapperClass.class);
         job.setReducerClass(ReducerClass.class);
-        job.setPartitionerClass(PartitionerClass.class);
+//        job.setPartitionerClass(PartitionerClass.class);
 //        job.setCombinerClass(CombinerClass.class);
 
         job.setMapOutputKeyClass(Text.class);
@@ -336,7 +319,9 @@ public class Step2
 //        FileOutputFormat.setOutputPath(job, new Path(args[1]));
 
         FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/step1_output/"));
+//        FileInputFormat.addInputPath(job, new Path("/user/local/step1_output/"));
         FileOutputFormat.setOutputPath(job, new Path("s3://jarbucket1012/step2_output/"));
+//        FileOutputFormat.setOutputPath(job, new Path("/user/local/step2_output/"));
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }

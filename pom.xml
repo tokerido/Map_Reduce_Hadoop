@@ -153,7 +153,7 @@
                             <finalName>WordCount</finalName>
                         </configuration>
                     </execution>
-                    <!-- Second execution for WordCount.jar -->
+                    <!-- Second execution for step2.jar -->
                     <execution>
                         <id>step2-jar</id>
                         <phase>package</phase>
@@ -179,6 +179,34 @@
                                 </transformer>
                             </transformers>
                             <finalName>Step2</finalName>
+                        </configuration>
+                    </execution>
+                    <!-- Second execution for step3.jar -->
+                    <execution>
+                        <id>step3-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>META-INF/LICENSE*</exclude>
+                                        <exclude>license/*</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>Step3</mainClass>
+                                </transformer>
+                            </transformers>
+                            <finalName>Step3</finalName>
                         </configuration>
                     </execution>
                 </executions>
