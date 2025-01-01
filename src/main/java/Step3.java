@@ -68,9 +68,7 @@ public class Step3 {
                 for (String field : fields){
                     String[] parts = field.split(":");
                     String name = parts[0];
-                    long val = Long.parseLong(parts[1]);
-
-//                        long val = Long.parseLong(field.substring(3));
+                    double val = Double.parseDouble(parts[1]);
 
                     switch (name) {
                         case "C0":
@@ -98,14 +96,11 @@ public class Step3 {
             if (C0 == 0 || C1 == 0 || C2 == 0 ||
                     N1 == 0 || N2 == 0 || N3 == 0) {
                 System.err.println("Invalid input: " + key.toString());
-                return; // Skip this line
             }
             else { // Calculate the probability
-//                context.write(new Text(String.format("C0:%.3f C1:%.3f C2:%.3f N1:%.3f N2:%.3f N3:%.3f", C0, C1, C2, N1, N2, N3)), new Text(""));
                 double k2 = (Math.log10(N2 + 1) + 1) / (Math.log10(N2 + 2) + 2);
                 double k3 = (Math.log10(N3 + 1) + 1) / (Math.log10(N3 + 2) + 2);
                 double prob = (k3 * (N3/C2)) + ((1 - k3)*k2*(N2/C1)) + ((1 - k3)*(1 - k2)*(N1/C0));
-
                 context.write(key, new Text(String.format("%.3f", prob)));
             }
         }
