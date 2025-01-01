@@ -67,6 +67,7 @@ public class Step2
         private boolean is1GramFile = false;
         private boolean is2GramFile = false;
         private boolean is3GramFile = false;
+        private final String NULL_CHARACTER = "\u0000";
 
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
@@ -116,7 +117,7 @@ public class Step2
 
 //                    Text outKey = new Text(w2);
                     TaggedValue outVal = new TaggedValue("2GRAM", count, String.format("%s %s", w1, w2));
-                    context.write(new Text(String.format("%s %s *",w2 ,w1)), outVal);
+                    context.write(new Text(String.format("%s %s %s",w2 ,w1, NULL_CHARACTER)), outVal);
                 }
             }
             else if (is1GramFile) {
@@ -127,7 +128,7 @@ public class Step2
                         long n1 = Long.parseLong(fields[1]);
 
 //                        Text outKey = new Text(w1);
-                        context.write(new Text(String.format("%s * *", w1)), new TaggedValue("1GRAM", n1, String.format("%s", w1) ));
+                        context.write(new Text(String.format("%s %s %s", w1, NULL_CHARACTER, NULL_CHARACTER)), new TaggedValue("1GRAM", n1, String.format("%s", w1) ));
 
                     }
                 }

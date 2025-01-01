@@ -46,12 +46,6 @@ public class Step3 {
 
 
     public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
-        public double C0 = 0;
-        public double C1 = 0;
-        public double C2 = 0;
-        public double N1 = 0;
-        public double N2 = 0;
-        public double N3 = 0;
 
 
         @Override
@@ -61,6 +55,12 @@ public class Step3 {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context)
                 throws IOException, InterruptedException {
+            double C0 = 0;
+            double C1 = 0;
+            double C2 = 0;
+            double N1 = 0;
+            double N2 = 0;
+            double N3 = 0;
             for (Text value: values){
 
                 String[] fields = value.toString().split("\\s+");
@@ -101,7 +101,8 @@ public class Step3 {
                 double k2 = (Math.log10(N2 + 1) + 1) / (Math.log10(N2 + 2) + 2);
                 double k3 = (Math.log10(N3 + 1) + 1) / (Math.log10(N3 + 2) + 2);
                 double prob = (k3 * (N3/C2)) + ((1 - k3)*k2*(N2/C1)) + ((1 - k3)*(1 - k2)*(N1/C0));
-                context.write(key, new Text(String.format("%.3f", prob)));
+                context.write(new Text(String.format("C0:%.1f C1:%.1f C2:%.1f N1:%.1f N2:%.1f N3:%.1f", C0, C1, C2, N1, N2, N3)), new Text(""));
+                context.write(key, new Text(String.format("%.5f", prob)));
             }
         }
     }
