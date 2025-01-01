@@ -18,7 +18,7 @@ import java.util.Comparator;
 
 public class Step3 {
 
-    public static class MapperClass extends Mapper<Text, Text, Text, Text> {
+    public static class MapperClass extends Mapper<LongWritable, Text, Text, Text> {
 
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
@@ -26,11 +26,15 @@ public class Step3 {
         }
 
         @Override
-        protected void map(Text key, Text value, Context context)
+        protected void map(LongWritable key, Text value, Context context)
                 throws IOException, InterruptedException {
+//            output from step2: :
+//            context.write(new Text(nGram), new Text(String.format("C0:%s C1:%d C2:%d N3:%d", C0, NorC1, NorC2, count)));
+
             String[] fields = value.toString().split("\\s+");
             if (fields.length != 7) {// Expecting: W1 W2 W3 C0 C1/N1 C2/N2 N3
-                throw new RuntimeException("Illegal value entered");
+                System.err.println("Invalid input: " + value.toString());
+                return; // Skip this line
             } else {
                 Text outputKey = new Text(String.format("%s %s %s", fields[0], fields[1], fields[2]));
                 Text outputValue = new Text(String.format("%s %s %s %s", fields[3], fields[4], fields[5], fields[6]));
@@ -42,12 +46,12 @@ public class Step3 {
 
 
     public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
-        public long C0 = -1;
-        public long C1 = -1;
-        public long C2 = -1;
-        public long N1 = -1;
-        public long N2 = -1;
-        public long N3 = -1;
+        public double C0 = 0;
+        public double C1 = 0;
+        public double C2 = 0;
+        public double N1 = 0;
+        public double N2 = 0;
+        public double N3 = 0;
 
 
         @Override
@@ -57,45 +61,53 @@ public class Step3 {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context)
                 throws IOException, InterruptedException {
-                for (Text value: values){
+            for (Text value: values){
 
-                    String[] fields = value.toString().split(" ");
+                String[] fields = value.toString().split("\\s+");
 
-                    for (String field : fields){
-                        String[] parts = field.split(":");
-                        String name = parts[0];
-                        long val = Long.parseLong(parts[1]);
+                for (String field : fields){
+                    String[] parts = field.split(":");
+                    String name = parts[0];
+                    long val = Long.parseLong(parts[1]);
 
 //                        long val = Long.parseLong(field.substring(3));
 
-                        switch (name) {
-                            case "C0":
-                                C0 = val;
-                            case "C1":
-                                C1 = val;
-                            case "C2":
-                                C2 = val;
-                            case "N1":
-                                N1 = val;
-                            case "N2":
-                                N2 = val;
-                            case "N3":
-                                N3 = val;
-                        }
+                    switch (name) {
+                        case "C0":
+                            C0 = val;
+                            break;
+                        case "C1":
+                            C1 = val;
+                            break;
+                        case "C2":
+                            C2 = val;
+                            break;
+                        case "N1":
+                            N1 = val;
+                            break;
+                        case "N2":
+                            N2 = val;
+                            break;
+                        case "N3":
+                            N3 = val;
+                            break;
                     }
                 }
-                if (C0 == -1 || C1 == -1 || C2 == -1 ||
-                        N1 == -1 || N2 == -1 || N3 == -1) {
-                    throw new RuntimeException("One of the values is not set");
-                }
-                else{ // Calculate the probability
-                    double k2 = (Math.log(N2 + 1) + 1) / (Math.log(N2 + 2) + 2);
-                    double k3 = (Math.log(N3 + 1) + 1) / (Math.log(N3 + 2) + 2);
 
-                    double prob = k3 * (N3/C2) + (1 - k3)*k2*(N2/C1) + (1 - k3)*(1 - k2)*(N1/C0);
+            }
+            if (C0 == 0 || C1 == 0 || C2 == 0 ||
+                    N1 == 0 || N2 == 0 || N3 == 0) {
+                System.err.println("Invalid input: " + key.toString());
+                return; // Skip this line
+            }
+            else { // Calculate the probability
+//                context.write(new Text(String.format("C0:%.3f C1:%.3f C2:%.3f N1:%.3f N2:%.3f N3:%.3f", C0, C1, C2, N1, N2, N3)), new Text(""));
+                double k2 = (Math.log10(N2 + 1) + 1) / (Math.log10(N2 + 2) + 2);
+                double k3 = (Math.log10(N3 + 1) + 1) / (Math.log10(N3 + 2) + 2);
+                double prob = (k3 * (N3/C2)) + ((1 - k3)*k2*(N2/C1)) + ((1 - k3)*(1 - k2)*(N1/C0));
 
-                    context.write(key, new Text(String.format("%.3f", prob)));
-                }
+                context.write(key, new Text(String.format("%.3f", prob)));
+            }
         }
     }
 

@@ -231,11 +231,17 @@ public class WordCount {
         job.setOutputValueClass(Text.class);
         job.setOutputFormatClass(TextOutputFormat.class);
 
-//        job.setInputFormatClass(SequenceFileInputFormat.class);  For S3 Ngram data
-        job.setInputFormatClass(TextInputFormat.class);
+        job.setInputFormatClass(SequenceFileInputFormat.class);  //For S3 Ngram data
+//        job.setInputFormatClass(TextInputFormat.class);
 
-//        FileInputFormat.addInputPath(job,
-//                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/3gram/data"));
+        FileInputFormat.addInputPath(job,
+                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/3gram/data"));
+        FileInputFormat.addInputPath(job,
+                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/2gram/data"));
+//
+        FileInputFormat.addInputPath(job,
+                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/1gram/data"));
+//
 //        FileInputFormat.addInputPath(job, new Path("s3://bucketforjars/input/3gram_sample_100"));
 //        FileOutputFormat.setOutputPath(job, new Path("s3://bucketforjars/output_word_count"));
 
@@ -250,9 +256,9 @@ public class WordCount {
 //        FileInputFormat.addInputPath(job, new Path(args[1]));
 //        FileOutputFormat.setOutputPath(job, new Path(args[2]));
 
-        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/input-samples/1gram_sample.csv"));
-        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/input-samples/2gram_sample.csv"));
-        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/input-samples/3gram_sample.csv"));
+//        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/input-samples/1gram_sample.csv"));
+//        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/input-samples/2gram_sample.csv"));
+//        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/input-samples/3gram_sample.csv"));
 //        FileOutputFormat.setOutputPath(job, new Path(args[1]));
         FileOutputFormat.setOutputPath(job, new Path("s3://jarbucket1012/step1_output/"));
 
