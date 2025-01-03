@@ -11,67 +11,129 @@ import java.io.*;
 
 public class Step4 {
 
-    public static class MapperClass extends Mapper<LongWritable, Text, Text, Text> {
+    public static class ProbabilityKey implements WritableComparable<ProbabilityKey> {
+        private final Text w1w2;
+        private final DoubleWritable probability;
+
+        public ProbabilityKey() {
+            this.w1w2 = new Text();
+            this.probability = new DoubleWritable();
+        }
+
+        public void set(String w1w2, double probability) {
+            this.w1w2.set(w1w2);
+            this.probability.set(probability);
+        }
+
+        @Override
+        public void write(DataOutput out) throws IOException {
+            w1w2.write(out);
+            probability.write(out);
+        }
+
+        @Override
+        public void readFields(DataInput in) throws IOException {
+            w1w2.readFields(in);
+            probability.readFields(in);
+        }
+
+        @Override
+        public int compareTo(ProbabilityKey other) {
+            int w1w2Compare = this.w1w2.compareTo(other.w1w2);
+            if (w1w2Compare != 0) {
+                return w1w2Compare;
+            }
+            // For same w1w2, sort by probability in descending order
+            return -Double.compare(this.probability.get(), other.probability.get());
+        }
+
+        public Text getW1w2() {
+            return w1w2;
+        }
+
+        public DoubleWritable getProbability() {
+            return probability;
+        }
+    }
+
+    public static class GroupingComparator extends WritableComparator {
+        protected GroupingComparator() {
+            super(ProbabilityKey.class, true);
+        }
+
+        @Override
+        public int compare(WritableComparable a, WritableComparable b) {
+            ProbabilityKey key1 = (ProbabilityKey) a;
+            ProbabilityKey key2 = (ProbabilityKey) b;
+            // Group only by w1w2
+            return key1.getW1w2().compareTo(key2.getW1w2());
+        }
+    }
+
+    public static class MapperClass extends Mapper<LongWritable, Text, ProbabilityKey, Text> {
+        private ProbabilityKey ProbabilityKey = new ProbabilityKey();
 
         @Override
         protected void map(LongWritable key, Text value, Context context)
                 throws IOException, InterruptedException {
             String[] fields = value.toString().split("\\s+");
-            if (fields.length != 4) { // Expecting: W1 W2 W3 prob
-                System.err.println("Invalid input: " + value.toString());
-                return; // Skip this line
-            } else {
-                Text outputKey = new Text(String.format("%s %s %s", fields[0], fields[1], fields[2]));
-                Text outputValue = new Text(String.format("%s", fields[3]));
-                context.write(outputKey, outputValue);
+            if (fields.length != 4) {
+                return;
+            }
+            String w1w2 = fields[0] + " " + fields[1];
+            String w3 = fields[2];
+            double probability = Double.parseDouble(fields[3]);
+
+            ProbabilityKey.set(w1w2, probability);
+            context.write(ProbabilityKey, new Text(w3));
+        }
+    }
+
+    public static class ReducerClass extends Reducer<ProbabilityKey, Text, Text, Text> {
+        @Override
+        protected void reduce(ProbabilityKey key, Iterable<Text> values, Context context)
+                throws IOException, InterruptedException {
+            for (Text w3 : values) {
+                String[] w1w2Parts = key.getW1w2().toString().split(" ");
+                String outputKey = String.format("%s %s %s", w1w2Parts[0], w1w2Parts[1], w3.toString());
+                context.write(new Text(outputKey), new Text(String.format("%.5f", key.getProbability().get())));
             }
         }
     }
 
-
-    public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
-
+    public static class PartitionerClass extends Partitioner<ProbabilityKey, Text> {
         @Override
-        protected void reduce(Text key, Iterable<Text> values, Context context)
-                throws IOException, InterruptedException {
+        public int getPartition(ProbabilityKey key, Text value, int numPartitions) {
+            // Partition only by w1w2 to ensure all records with same w1w2 go to same reducer
+            return Math.abs(key.getW1w2().hashCode() % numPartitions);
         }
     }
-
-//    public static class PartitionerClass extends Partitioner<Text, Text> {
-//        @Override
-//        public int getPartition(Text key, Step2.TaggedValue value, int numPartitions) {
-//
-//            return Math.abs(key.toString().hashCode() % numPartitions);
-//        }
-//    }
 
     public static void main(String[] args) throws Exception {
         System.out.println("[DEBUG] STEP 4 started!");
 
+//        String jarBucketName = "jarbucket1012";
+        String jarBucketName = "hadoop-map-reduce-bucket";
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "Step4");
 
         job.setJarByClass(Step4.class);
-        job.setMapperClass(Step4.MapperClass.class);
-        job.setReducerClass(Step4.ReducerClass.class);
-//        job.setPartitionerClass(PartitionerClass.class);
-//        job.setCombinerClass(CombinerClass.class);
+        job.setMapperClass(MapperClass.class);
+        job.setReducerClass(ReducerClass.class);
+        job.setPartitionerClass(PartitionerClass.class);
+        job.setGroupingComparatorClass(GroupingComparator.class);
 
-        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputKeyClass(ProbabilityKey.class);
         job.setMapOutputValueClass(Text.class);
-
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);
-        job.setOutputFormatClass(TextOutputFormat.class);
 
         job.setInputFormatClass(TextInputFormat.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
 
-//        job.setNumReduceTasks(4);
-
-
-        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/step3_output/"));
+        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step3_output/"));
 //        FileInputFormat.addInputPath(job, new Path("/user/local/step1_output/"));
-        FileOutputFormat.setOutputPath(job, new Path("s3://jarbucket1012/step4_output/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step4_output/"));
 //        FileOutputFormat.setOutputPath(job, new Path("/user/local/step2_output/"));
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);

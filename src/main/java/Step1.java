@@ -244,19 +244,17 @@ public class Step1 {
         boolean success = job.waitForCompletion(true);
 
         if (success) {
-            // Retrieve the counter value
             long c0Value = job.getCounters()
                     .findCounter("CustomGroup", "C0")
                     .getValue();
 
-            // Write the counter value to the beginning of the file
-            String s3OutputPath = "s3://" + jarBucketName + "/step1_output/part-r-00000"; // S3 location, e.g.,
-                                                                                          // "s3://my-bucket/counter-output.txt"
+            String s3OutputPath = "s3://" + jarBucketName + "/step1_output/part-r-00000";
+
             FileSystem fs = FileSystem.get(URI.create(s3OutputPath), new Configuration());
             try (BufferedWriter writer = new BufferedWriter(
                     new OutputStreamWriter(fs.create(new Path(s3OutputPath), true)))) {
                 writer.write("C0 " + c0Value);
-                writer.newLine(); // Add a newline if you plan to append other data later
+                writer.newLine();
             }
         }
         System.exit(success ? 0 : 1);

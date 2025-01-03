@@ -1,5 +1,4 @@
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.*;
@@ -11,26 +10,14 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
 import java.io.*;
-
 import java.net.URI;
-
-import java.util.Comparator;
-
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
 
 public class Step2
 {
     public static class TaggedValue implements Writable {
-        private Text tag;    // e.g. "1GRAM", "2GRAM", "3GRAM", "C0"
-        private LongWritable count;  // the numeric count
-        // Possibly store which position(s) this belongs to (for 2-gram or 1-gram).
-        // But let's keep it simple and store the original token(s) as needed.
-        private Text nGram;  // e.g. store "w1_w2" or "w" if needed
+        private final Text tag;    // e.g. "1GRAM", "2GRAM", "3GRAM", "C0"
+        private final LongWritable count;  // the numeric count
+        private final Text nGram;  // e.g. the original n-gram
 
         public TaggedValue() {
             this.tag = new Text();
@@ -71,8 +58,6 @@ public class Step2
 
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
-            // In a real job, you might pass a parameter or
-            // check the input split path. For example:
             String filename = ((FileSplit) context.getInputSplit()).getPath().getName();
             if (filename.contains("1gram")) {
                 is1GramFile = true;
@@ -136,40 +121,38 @@ public class Step2
         }
     }
 
-    public static class CustomValueComparator implements Comparator<TaggedValue> {
-        @Override
-        public int compare(TaggedValue tv1, TaggedValue tv2) {
-            // Extract tags and nGrams
-            String tag1 = tv1.getTag().toString();
-            String tag2 = tv2.getTag().toString();
-            String nGram1 = tv1.getNGram().toString();
-            String nGram2 = tv2.getNGram().toString();
-
-            // Rule 1: `1GRAM` always comes first
-            if (tag1.equals("1GRAM") && !tag2.equals("1GRAM")) {
-                return -1; // tv1 (1GRAM) comes first
-            }
-            if (!tag1.equals("1GRAM") && tag2.equals("1GRAM")) {
-                return 1; // tv2 (1GRAM) comes first
-            }
-
-            // Rule 2: For other tags, sort alphabetically by nGram
-            return nGram1.compareTo(nGram2);
-        }
-    }
+//    public static class CustomValueComparator implements Comparator<TaggedValue> {
+//        @Override
+//        public int compare(TaggedValue tv1, TaggedValue tv2) {
+//            // Extract tags and nGrams
+//            String tag1 = tv1.getTag().toString();
+//            String tag2 = tv2.getTag().toString();
+//            String nGram1 = tv1.getNGram().toString();
+//            String nGram2 = tv2.getNGram().toString();
+//
+//            // Rule 1: `1GRAM` always comes first
+//            if (tag1.equals("1GRAM") && !tag2.equals("1GRAM")) {
+//                return -1; // tv1 (1GRAM) comes first
+//            }
+//            if (!tag1.equals("1GRAM") && tag2.equals("1GRAM")) {
+//                return 1; // tv2 (1GRAM) comes first
+//            }
+//
+//            // Rule 2: For other tags, sort alphabetically by nGram
+//            return nGram1.compareTo(nGram2);
+//        }
+//    }
 
     public static class ReducerClass extends Reducer<Text, TaggedValue, Text, Text> {
 
         public long C0;
-
         // For 1-grams:
         public long NorC1 = 0;
-
         // For 2-grams:
         public long NorC2 = 0;
 
         @Override
-        protected void setup(Reducer.Context context) throws IOException, InterruptedException {
+        protected void setup(Context context) throws IOException, InterruptedException {
             C0 = Long.parseLong(context.getConfiguration().get("C0"));
         }
 
@@ -192,7 +175,8 @@ public class Step2
                     case "3GRAM-2" : // W2 case
 //                        context.write(new Text("Entered 3GRAM-2"), new Text(""));
 
-                        context.write(new Text(nGram), new Text(String.format("C0:%s C1:%d C2:%d N3:%d", C0, NorC1, NorC2, count)));
+                        context.write(new Text(nGram), new Text(String.format("C0:%d C1:%d C2:%d N3:%d", C0, NorC1, NorC2, count)));
+
                         break;
 
                     case "3GRAM-3": // W3 case
@@ -200,7 +184,7 @@ public class Step2
 
 //                        String[] words = nGram.split(" ");
 //                        context.write(new Text(String.format("%s %s %s", words[2], words[0], words[1])), new Text(String.format("C0:%s N1:%d N2:%d N3:%d", C0, NorC1, NorC2, count)));
-                        context.write(new Text(nGram), new Text(String.format("C0:%s N1:%d N2:%d N3:%d", C0, NorC1, NorC2, count)));
+                        context.write(new Text(nGram), new Text(String.format("C0:%d N1:%d N2:%d N3:%d", C0, NorC1, NorC2, count)));
                         break;
 
                     case "2GRAM" :
@@ -214,8 +198,10 @@ public class Step2
                         break;
 
                 }
-            } // end for
+            }
         }
+
+
     }
 
     public static class PartitionerClass extends Partitioner<Text, TaggedValue> {
@@ -247,7 +233,10 @@ public class Step2
         System.out.println("[DEBUG] STEP 2 started!");
 //        System.out.println(args.length > 0 ? args[0] : "no args");
 
-        String s3InputPath = "s3a://jarbucket1012/step1_output/part-r-00000"; // S3 location, e.g., "s3://my-bucket/counter-output.txt"
+//        String jarBucketName = "jarbucket1012";
+        String jarBucketName = "hadoop-map-reduce-bucket";
+
+        String s3InputPath = "s3a://" + jarBucketName + "/step1_output/part-r-00000";
         FileSystem fs = FileSystem.get(URI.create(s3InputPath), new Configuration());
         String c0Value = null;
 
@@ -271,7 +260,7 @@ public class Step2
 
 
 //        String c0 = "";
-//        Path input_1gram = new Path("s3://jarbucket1012/input-samples/output_test_1gram");  // Path to the file from Step1
+//        Path input_1gram = new Path("s3://" + jarBucketName + "/input-samples/output_test_1gram");  // Path to the file from Step1
 //        FileSystem fs = FileSystem.get(conf);
 //        FSDataInputStream in = fs.open(input_1gram);
 //        BufferedReader reader = new BufferedReader(new InputStreamReader(in));
@@ -319,9 +308,9 @@ public class Step2
 //        FileInputFormat.addInputPath(job, new Path("/user/local/input/output_test_3gram"));
 //        FileOutputFormat.setOutputPath(job, new Path(args[1]));
 
-        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/step1_output/"));
+        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step1_output/"));
 //        FileInputFormat.addInputPath(job, new Path("/user/local/step1_output/"));
-        FileOutputFormat.setOutputPath(job, new Path("s3://jarbucket1012/step2_output/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step2_output/"));
 //        FileOutputFormat.setOutputPath(job, new Path("/user/local/step2_output/"));
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);

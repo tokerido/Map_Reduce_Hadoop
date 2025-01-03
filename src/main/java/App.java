@@ -17,7 +17,8 @@ public class App {
 
     public static int numberOfInstances = 1;
 
-    public static String jarBucketName = "jarbucket1012";
+//    public static String jarBucketName = "jarbucket1012";
+    public static String jarBucketName = "hadoop-map-reduce-bucket";
 
     public static void main(String[]args){
         credentialsProvider = new ProfileCredentialsProvider();
@@ -39,8 +40,8 @@ public class App {
 
         // Step 1
         HadoopJarStepConfig step1 = new HadoopJarStepConfig()
-                .withJar("s3://" + jarBucketName + "/jars/WordCount.jar")
-                .withMainClass("WordCount");
+                .withJar("s3://" + jarBucketName + "/jars/Step1.jar")
+                .withMainClass("Step1");
 
         StepConfig stepConfig1 = new StepConfig()
                 .withName("Step1")
@@ -67,6 +68,16 @@ public class App {
                 .withHadoopJarStep(step3)
                 .withActionOnFailure("TERMINATE_JOB_FLOW");
 
+        // Step 4
+        HadoopJarStepConfig step4 = new HadoopJarStepConfig()
+                .withJar("s3://" + jarBucketName + "/jars/Step4.jar")
+                .withMainClass("Step4");
+
+        StepConfig stepConfig4 = new StepConfig()
+                .withName("Step4")
+                .withHadoopJarStep(step4)
+                .withActionOnFailure("TERMINATE_JOB_FLOW");        
+        
         //Job flow
         JobFlowInstancesConfig instances = new JobFlowInstancesConfig()
                 .withInstanceCount(numberOfInstances)
@@ -81,7 +92,7 @@ public class App {
         RunJobFlowRequest runFlowRequest = new RunJobFlowRequest()
                 .withName("Map reduce project")
                 .withInstances(instances)
-                .withSteps(stepConfig1, stepConfig2, stepConfig3)
+                .withSteps(stepConfig1, stepConfig2, stepConfig3, stepConfig4)
                 .withLogUri("s3://" + jarBucketName + "/logs/")
                 .withServiceRole("EMR_DefaultRole")
                 .withJobFlowRole("EMR_EC2_DefaultRole")

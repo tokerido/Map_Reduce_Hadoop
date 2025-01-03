@@ -49,7 +49,7 @@ public class Step3 {
 
 
         @Override
-        protected void setup(Reducer.Context context) throws IOException, InterruptedException {
+        protected void setup(Context context) throws IOException, InterruptedException {
         }
 
         @Override
@@ -101,7 +101,7 @@ public class Step3 {
                 double k2 = (Math.log10(N2 + 1) + 1) / (Math.log10(N2 + 2) + 2);
                 double k3 = (Math.log10(N3 + 1) + 1) / (Math.log10(N3 + 2) + 2);
                 double prob = (k3 * (N3/C2)) + ((1 - k3)*k2*(N2/C1)) + ((1 - k3)*(1 - k2)*(N1/C0));
-                context.write(new Text(String.format("C0:%.1f C1:%.1f C2:%.1f N1:%.1f N2:%.1f N3:%.1f", C0, C1, C2, N1, N2, N3)), new Text(""));
+                // context.write(new Text(String.format("C0:%.1f C1:%.1f C2:%.1f N1:%.1f N2:%.1f N3:%.1f", C0, C1, C2, N1, N2, N3)), new Text(""));
                 context.write(key, new Text(String.format("%.5f", prob)));
             }
         }
@@ -119,7 +119,8 @@ public class Step3 {
         System.out.println("[DEBUG] STEP 3 started!");
 //        System.out.println(args.length > 0 ? args[0] : "no args");
 
-
+//        String jarBucketName = "jarbucket1012";
+        String jarBucketName = "hadoop-map-reduce-bucket";
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "Step3");
 
@@ -143,13 +144,13 @@ public class Step3 {
 
 //        FileInputFormat.addInputPath(job,
 //                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/3gram/data"));
-//        FileInputFormat.addInputPath(job, new Path("s3://bucketforjars/input/3gram_sample_100"));
-//        FileOutputFormat.setOutputPath(job, new Path("s3://bucketforjars/output_word_count"));
+//        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/input/3gram_sample_100"));
+//        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/output_word_count"));
 
 
-        FileInputFormat.addInputPath(job, new Path("s3://jarbucket1012/step2_output/"));
+        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step2_output/"));
 //        FileInputFormat.addInputPath(job, new Path("/user/local/step1_output/"));
-        FileOutputFormat.setOutputPath(job, new Path("s3://jarbucket1012/step3_output/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step3_output/"));
 //        FileOutputFormat.setOutputPath(job, new Path("/user/local/step2_output/"));
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);
