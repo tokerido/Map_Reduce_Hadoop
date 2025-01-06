@@ -1,7 +1,6 @@
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-//import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
@@ -14,26 +13,20 @@ import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.lib.output.MultipleOutputs;
-import software.amazon.ion.SystemSymbols;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.conf.Configuration;
 import java.net.URI;
 import java.io.BufferedWriter;
 import java.io.OutputStreamWriter;
+import org.apache.hadoop.fs.FileSystem;
 
 public class Step1 {
     public static class MapperClass extends Mapper<LongWritable, Text, Text, Text> {
         public final HashSet<String> STOPWORDS = new HashSet<>();
-        private String currentFileName;
 
         @Override
         protected void setup(Context context) {
@@ -55,11 +48,14 @@ public class Step1 {
                     "אי", "אותה", "או", "אבל", "א", "");
 
             FileSplit fileSplit = (FileSplit) context.getInputSplit();
-            currentFileName = fileSplit.getPath().getName();
+            String currentFileName = fileSplit.getPath().getName();
             System.out.println("Processing file: " + currentFileName);
 
         }
 
+        ///
+        /// Filter out n-grams that aren't valuable data like commonly used words or signs
+        ///
         protected boolean isValuable(String[] words, int nGramSize, Context context) {
 
             if (words.length != nGramSize) {
@@ -80,6 +76,9 @@ public class Step1 {
             return true;
         }
 
+        ///
+        /// Counts all the valuable data in each line
+        ///
         @Override
         public void map(LongWritable lineId, Text line, Context context) throws IOException, InterruptedException {
 
@@ -87,13 +86,11 @@ public class Step1 {
 
             if (fields.length > 0) {
                 String[] words = fields[0].split(" ");
-//                boolean isValuable = ;
-//                context.write(new Text("This is the N-gram - " + fields[0] + " - This is the length - " + words.length + " - isValuable:" + isValuable),
-//                            new Text("0"));
+
                 if (isValuable(words, words.length, context)) {
                     context.write(new Text(String.join(" ", words)), new Text(fields[2]));
                     if (words.length == 1) {
-                        // context.write(new Text("C0"), new Text(fields[2]));
+                        // Add to the total word count in the corpus - C0
                         context.getCounter("CustomGroup", "C0").increment(Integer.parseInt(fields[2]));
                     }
                 }
@@ -103,11 +100,14 @@ public class Step1 {
         }
     }
 
+    ///
+    /// Combine all the counts of the mapper into single values
+    /// For example:
+    /// [(Danny,1),(Danny,1),(Danny,1),(Tammy,1),(Tammy,1)] -> [(Danny,3),(Tammy,2)]
+    ///
     public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
 
         private MultipleOutputs<Text, Text> multipleOutputs;
-        // private long totalWords = 0;
-
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
             multipleOutputs = new MultipleOutputs<>(context);
@@ -115,13 +115,6 @@ public class Step1 {
 
         @Override
         public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-
-            // if (key.toString().equals("C0")) {
-            // for (Text value : values) {
-            // totalWords += Long.parseLong(value.toString());
-            // }
-            // return;
-            // }
 
             String[] words = key.toString().split(" ");
 
@@ -142,22 +135,24 @@ public class Step1 {
                     output = "3gram";
                     break;
                 default:
-                    output = "debug"; // Default case
+                    output = "error"; // Default case
                     break;
             }
 
             multipleOutputs.write(output, key, new Text(Integer.toString(sum)));
-            // context.write(key, new Text(Integer.toString(sum)));
         }
 
         @Override
         protected void cleanup(Context context) throws IOException, InterruptedException {
-            // multipleOutputs.write("1gram", new Text("C0"), new
-            // Text(Long.toString(totalWords)));
             multipleOutputs.close();
         }
     }
 
+    ///
+    /// Combine all the counts of the mapper into single values
+    /// For example:
+    /// [(Danny,1),(Danny,1),(Danny,1),(Tammy,1),(Tammy,1)] -> [(Danny,3),(Tammy,2)]
+    ///
     public static class CombinerClass extends Reducer<Text, Text, Text, Text> {
 
         @Override
@@ -170,18 +165,15 @@ public class Step1 {
 
             context.write(key, new Text(Integer.toString(sum)));
         }
-
     }
 
+    ///
+    /// Partition by the first word
+    ///
     public static class PartitionerClass extends Partitioner<Text, Text> {
 
         @Override
         public int getPartition(Text key, Text value, int numPartitions) {
-            if (key.toString().equals("C0")) {
-                return 0; // Send all C0 counts to the same reducer
-            }
-
-            // Partition based on the first word
             String w1 = key.toString().split(" ")[0];
             return Math.abs(w1.hashCode() % numPartitions);
         }
@@ -190,11 +182,17 @@ public class Step1 {
     public static void main(String[] args) throws Exception {
         System.out.println("[DEBUG] STEP 1 started!");
 
-        // String jarBucketName = "jarbucket1012";
+//         String jarBucketName = "jarbucket1012";
         String jarBucketName = "hadoop-map-reduce-bucket";
 
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "Step1");
+
+//        int NUM_MAPPERS = 4;
+//        conf.setInt("mapreduce.job.maps", NUM_MAPPERS);
+        job.getConfiguration().setLong("mapreduce.input.fileinputformat.split.maxsize", 10 * 1024); // 32MB (default is 128MB)
+
+
 
         job.setJarByClass(Step1.class);
         job.setMapperClass(MapperClass.class);
@@ -206,49 +204,36 @@ public class Step1 {
         job.setOutputValueClass(Text.class);
         job.setOutputFormatClass(TextOutputFormat.class);
 
-//        job.setInputFormatClass(TextInputFormat.class);
-//        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/input/"));
+        job.setInputFormatClass(TextInputFormat.class);
+        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/input/"));
 
-        job.setInputFormatClass(SequenceFileInputFormat.class); // For S3 Ngram data
-        FileInputFormat.addInputPath(job,
-                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/3gram/data"));
-        FileInputFormat.addInputPath(job,
-                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/2gram/data"));
-        //
-        FileInputFormat.addInputPath(job,
-                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/1gram/data"));
-
+//        job.setInputFormatClass(SequenceFileInputFormat.class); // For S3 Ngram data
+//        FileInputFormat.addInputPath(job,
+//                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/3gram/data"));
+//        FileInputFormat.addInputPath(job,
+//                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/2gram/data"));
+//        FileInputFormat.addInputPath(job,
+//                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/1gram/data"));
 
 
 
-        // conf.set("mapreduce.input.fileinputformat.split.maxsize", "128000000");
-
-        // Enable MultipleOutputs
         MultipleOutputs.addNamedOutput(job, "1gram", TextOutputFormat.class, Text.class, Text.class);
         MultipleOutputs.addNamedOutput(job, "2gram", TextOutputFormat.class, Text.class, Text.class);
         MultipleOutputs.addNamedOutput(job, "3gram", TextOutputFormat.class, Text.class, Text.class);
-        MultipleOutputs.addNamedOutput(job, "debug", TextOutputFormat.class, Text.class, Text.class);
+        MultipleOutputs.addNamedOutput(job, "error", TextOutputFormat.class, Text.class, Text.class);
 
-        // FileInputFormat.addInputPath(job, new Path(args[1]));
-        // FileOutputFormat.setOutputPath(job, new Path(args[2]));
 
-        // FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName +
-        // "/input-samples/1gram_sample.csv"));
-        // FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName +
-        // "/input-samples/2gram_sample.csv"));
-        // FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName +
-        // "/input-samples/3gram_sample.csv"));
-        // FileOutputFormat.setOutputPath(job, new Path(args[1]));
-        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step1_output/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step1_output_small/"));
 
         boolean success = job.waitForCompletion(true);
 
         if (success) {
+            // Write down C0 value to use in the next step
             long c0Value = job.getCounters()
                     .findCounter("CustomGroup", "C0")
                     .getValue();
 
-            String s3OutputPath = "s3://" + jarBucketName + "/step1_output/part-r-00000";
+            String s3OutputPath = "s3://" + jarBucketName + "/step1_output_small/part-r-00000";
 
             FileSystem fs = FileSystem.get(URI.create(s3OutputPath), new Configuration());
             try (BufferedWriter writer = new BufferedWriter(

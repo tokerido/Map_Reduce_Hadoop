@@ -43,7 +43,6 @@ public class Step4 {
             if (w1w2Compare != 0) {
                 return w1w2Compare;
             }
-            // For same w1w2, sort by probability in descending order
             return -Double.compare(this.probability.get(), other.probability.get());
         }
 
@@ -104,7 +103,6 @@ public class Step4 {
     public static class PartitionerClass extends Partitioner<ProbabilityKey, Text> {
         @Override
         public int getPartition(ProbabilityKey key, Text value, int numPartitions) {
-            // Partition only by w1w2 to ensure all records with same w1w2 go to same reducer
             return Math.abs(key.getW1w2().hashCode() % numPartitions);
         }
     }
@@ -114,6 +112,7 @@ public class Step4 {
 
 //        String jarBucketName = "jarbucket1012";
         String jarBucketName = "hadoop-map-reduce-bucket";
+
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "Step4");
 
@@ -131,10 +130,8 @@ public class Step4 {
         job.setInputFormatClass(TextInputFormat.class);
         job.setOutputFormatClass(TextOutputFormat.class);
 
-        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step3_output/"));
-//        FileInputFormat.addInputPath(job, new Path("/user/local/step1_output/"));
-        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step4_output/"));
-//        FileOutputFormat.setOutputPath(job, new Path("/user/local/step2_output/"));
+        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step3_output_small/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step4_output_small/"));
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
