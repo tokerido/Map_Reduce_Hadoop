@@ -38,26 +38,26 @@ public class App {
                 System.out.println("list cluster");
                 System.out.println(emr.listClusters());
 
-                // Step 1
-                HadoopJarStepConfig step1 = new HadoopJarStepConfig()
-                                .withJar("s3://" + jarBucketName + "/jars/Step1.jar")
-                                .withMainClass("Step1");
-
-                StepConfig stepConfig1 = new StepConfig()
-                                .withName("Step1")
-                                .withHadoopJarStep(step1)
-                                .withActionOnFailure("TERMINATE_JOB_FLOW");
-
-                // Step 2
-                HadoopJarStepConfig step2 = new HadoopJarStepConfig()
-                                .withJar("s3://" + jarBucketName + "/jars/Step2.jar")
-                                .withMainClass("Step2");
-
-                StepConfig stepConfig2 = new StepConfig()
-                                .withName("Step2")
-                                .withHadoopJarStep(step2)
-                                .withActionOnFailure("TERMINATE_JOB_FLOW");
-
+//                // Step 1
+//                HadoopJarStepConfig step1 = new HadoopJarStepConfig()
+//                                .withJar("s3://" + jarBucketName + "/jars/Step1.jar")
+//                                .withMainClass("Step1");
+//
+//                StepConfig stepConfig1 = new StepConfig()
+//                                .withName("Step1")
+//                                .withHadoopJarStep(step1)
+//                                .withActionOnFailure("TERMINATE_JOB_FLOW");
+//
+//                // Step 2
+//                HadoopJarStepConfig step2 = new HadoopJarStepConfig()
+//                                .withJar("s3://" + jarBucketName + "/jars/Step2.jar")
+//                                .withMainClass("Step2");
+//
+//                StepConfig stepConfig2 = new StepConfig()
+//                                .withName("Step2")
+//                                .withHadoopJarStep(step2)
+//                                .withActionOnFailure("TERMINATE_JOB_FLOW");
+//
                 // Step 3
                 HadoopJarStepConfig step3 = new HadoopJarStepConfig()
                                 .withJar("s3://" + jarBucketName + "/jars/Step3.jar")
@@ -78,6 +78,18 @@ public class App {
                                 .withHadoopJarStep(step4)
                                 .withActionOnFailure("TERMINATE_JOB_FLOW");
 
+
+                // Step 1_2 combined
+                HadoopJarStepConfig Step_1_2_Combined = new HadoopJarStepConfig()
+                        .withJar("s3://" + jarBucketName + "/jars/Step_1_2_Combined.jar")
+                        .withMainClass("Step_1_2_Combined");
+
+                StepConfig Step_1_2_Combined_Config = new StepConfig()
+                        .withName("Step_1_2_Combined")
+                        .withHadoopJarStep(Step_1_2_Combined)
+                        .withActionOnFailure("TERMINATE_JOB_FLOW");
+
+
                 // Job flow
                 JobFlowInstancesConfig instances = new JobFlowInstancesConfig()
                                 .withInstanceCount(numberOfInstances)
@@ -92,7 +104,8 @@ public class App {
                 RunJobFlowRequest runFlowRequest = new RunJobFlowRequest()
                                 .withName("Map reduce project")
                                 .withInstances(instances)
-                                .withSteps(stepConfig1, stepConfig2, stepConfig3, stepConfig4)
+//                                .withSteps(stepConfig1, stepConfig2, stepConfig3, stepConfig4)
+                                .withSteps(Step_1_2_Combined_Config, stepConfig3, stepConfig4)
                                 .withLogUri("s3://" + jarBucketName + "/logs/")
                                 .withServiceRole("EMR_DefaultRole")
                                 .withJobFlowRole("EMR_EC2_DefaultRole")
