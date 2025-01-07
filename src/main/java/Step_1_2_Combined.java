@@ -283,19 +283,47 @@ public class Step_1_2_Combined {
     /// For example:
     /// [(Danny,1),(Danny,1),(Danny,1),(Tammy,1),(Tammy,1)] -> [(Danny,3),(Tammy,2)]
     ///
-//    public static class CombinerClass extends Reducer<Text, Text, Text, Text> {
-//
-//        @Override
-//        public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-//
-//            int sum = 0;
-//            for (Text value : values) {
-//                sum += Integer.parseInt(value.toString());
-//            }
-//
-//            context.write(key, new Text(Integer.toString(sum)));
-//        }
-//    }
+    public static class CombinerClass extends Reducer<Text, TaggedValue, Text, TaggedValue> {
+        @Override
+        public void reduce(Text key, Iterable<TaggedValue> values, Context context) throws IOException, InterruptedException {
+
+            TaggedValue lastVal = null;
+            long sum = 0;
+
+            boolean lastRoundUpdate = false;
+
+            for (TaggedValue value : values) {
+
+//                /*Debug*/context.write(new Text(String.format("Gram %s", value.getNGram())), new Text(""));
+
+                if (lastVal == null){ // Set the first value
+                    lastVal = value;
+                    sum = value.getCount().get();
+                    continue;
+                }
+
+                if (value.getNGram().equals(lastVal.getNGram())) {
+                    sum += value.getCount().get();
+                    lastRoundUpdate = false;
+
+//                    /*Debug*/context.write(new Text(String.format("In gram %s, changed sum to: %d", lastVal.getNGram(), sum)), new Text(""));
+                }
+                else {
+
+                    context.write(key, lastVal);
+
+//                    /*Debug*/context.write(new Text(String.format("Moving from value %s to value %s", lastVal.getNGram(), value.getNGram())), new Text(""));
+                    lastRoundUpdate = true;
+                    lastVal = value;
+                    sum = value.getCount().get();
+                }
+            }
+
+            if (lastVal != null && !lastRoundUpdate)
+                context.write(key, lastVal);
+        }
+
+    }
 
     ///
     /// Partition by the first word
@@ -328,7 +356,7 @@ public class Step_1_2_Combined {
         job.setMapperClass(MapperClass.class);
         job.setReducerClass(ReducerClass.class);
 //        job.setPartitionerClass(PartitionerClass.class);
-//        job.setCombinerClass(CombinerClass.class);
+        job.setCombinerClass(CombinerClass.class);
 
         job.setMapOutputKeyClass(Text.class);
         job.setMapOutputValueClass(TaggedValue.class);
