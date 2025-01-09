@@ -1,5 +1,5 @@
 # Word Prediction Knowledge Base
-
+by Liz Gokhvat [username: lizgo , id: 208005777] , Ido Toker [username: idoto , id: 207942186]
 ## Overview
 
 This project constructs a knowledge base for Hebrew word prediction based on the Google 3-Gram Hebrew dataset. The solution is implemented using Hadoop MapReduce and runs on the Amazon Elastic MapReduce (EMR) service. The output is a set of word trigrams (w1, w2, w3) with their conditional probabilities \(P(w3 | w1, w2)\). The results are stored in a sorted order based on the first two words (ascending) and probabilities (descending).
