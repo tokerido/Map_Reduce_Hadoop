@@ -15,11 +15,17 @@ public class App {
         public static AmazonEC2 ec2;
         public static AmazonElasticMapReduce emr;
 
-        public static int numberOfInstances = 8;
+        public static int numberOfInstances = 6;
 
 //        public static String jarBucketName = "jarbucket1012";
         public static String jarBucketName = "hadoop-map-reduce-bucket";
-        public static String folderName = "jars/Small/";
+
+//        public static String folderName = "/jars/Small/";
+//        public static String folderName = "/jars/Small_splitted/";
+//        public static String folderName = "/jars/Large/";
+        public static String folderName = "/jars/Large_splitted/";
+
+
 
         public static void main(String[] args) {
                 credentialsProvider = new ProfileCredentialsProvider();

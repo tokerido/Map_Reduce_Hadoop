@@ -161,8 +161,8 @@ public class Step3 {
 
         job.setInputFormatClass(TextInputFormat.class);
 
-        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step2_output_large/"));
-        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step3_output_large/"));
+        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step2_output_large_splitted/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step3_output_large_splitted/"));
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }

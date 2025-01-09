@@ -1,17 +1,51 @@
 import java.io.*;
 import java.util.*;
+import java.nio.file.*;
 
 public class Interesting_word_finder {
     public static void main(String[] args) {
-        BufferedReader reader = null;
-        BufferedWriter writer = null;
+        if (args.length != 2) {
+            System.out.println("Usage: java Interesting_word_finder <input_folder> <output_file>");
+            return;
+        }
+
+        String inputFolder = args[0];
+        String outputFile = args[1];
+        Map<String, List<Pair>> trigramMap = new HashMap<>();
 
         try {
-            reader = new BufferedReader(new FileReader("/Users/lizgokhvat/Desktop/Projects/AWS/Map_Reduce_Hadoop/output/output1/part-r-00000 (6)"));
-            writer = new BufferedWriter(new FileWriter("output.txt"));
+            // Get all files in the input folder
+            Files.list(Paths.get(inputFolder))
+                .filter(Files::isRegularFile)
+                .forEach(file -> processFile(file, trigramMap));
 
-            Map<String, List<Pair>> trigramMap = new HashMap<String, List<Pair>>();
+            // Write results to output file
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
+                for (Map.Entry<String, List<Pair>> entry : trigramMap.entrySet()) {
+                    if (entry.getValue().size() > 5) {
+                        writer.write(entry.getKey() + "\n");
 
+                        Collections.sort(entry.getValue(), new Comparator<Pair>() {
+                            public int compare(Pair a, Pair b) {
+                                return Double.compare(b.probability, a.probability);
+                            }
+                        });
+
+                        for (int i = 0; i < 5; i++) {
+                            Pair pair = entry.getValue().get(i);
+                            writer.write(pair.w3 + " " + pair.probability + "\n");
+                        }
+                        writer.write("\n");
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void processFile(Path filePath, Map<String, List<Pair>> trigramMap) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath.toFile()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] parts = line.split("\\s+");
@@ -21,38 +55,12 @@ public class Interesting_word_finder {
                 String w3 = parts[2];
                 double prob = Double.parseDouble(parts[3]);
 
-                if (!trigramMap.containsKey(key)) {
-                    trigramMap.put(key, new ArrayList<Pair>());
-                }
-                trigramMap.get(key).add(new Pair(w3, prob));
-            }
-
-            for (Map.Entry<String, List<Pair>> entry : trigramMap.entrySet()) {
-                if (entry.getValue().size() > 5) {
-                    writer.write(entry.getKey() + "\n");
-
-                    Collections.sort(entry.getValue(), new Comparator<Pair>() {
-                        public int compare(Pair a, Pair b) {
-                            return Double.compare(b.probability, a.probability);
-                        }
-                    });
-
-                    for (int i = 0; i < 5; i++) {
-                        Pair pair = entry.getValue().get(i);
-                        writer.write(pair.w3 + " " + pair.probability + "\n");
-                    }
-                    writer.write("\n");
-                }
+                trigramMap.computeIfAbsent(key, k -> new ArrayList<>())
+                         .add(new Pair(w3, prob));
             }
         } catch (IOException e) {
+            System.err.println("Error processing file: " + filePath);
             e.printStackTrace();
-        } finally {
-            try {
-                if (reader != null) reader.close();
-                if (writer != null) writer.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
     }
 

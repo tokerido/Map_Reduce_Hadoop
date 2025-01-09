@@ -4,6 +4,9 @@ out/
 !**/src/test/**/out/
 .idea/
 target/
+/META-INF/
+/src/META-INF/
+/src/main/java/META-INF/
 
 ### Eclipse ###
 .apt_generated
@@ -36,3 +39,4 @@ bin/
 
 ### output files ###
 /output/
+/step_results/

@@ -12,15 +12,14 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import java.io.*;
 import java.net.URI;
 
-public class Step2
-{
+public class Step2 {
     ///
     /// Custom writable value to store all the necessary data
     ///
     public static class TaggedValue implements Writable {
-        private final Text tag;    // For example: "1GRAM", "2GRAM", "3GRAM", "C0"
-        private final LongWritable count;  // The numeric count
-        private final Text nGram;  // The original n-gram
+        private final Text tag; // For example: "1GRAM", "2GRAM", "3GRAM", "C0"
+        private final LongWritable count; // The numeric count
+        private final Text nGram; // The original n-gram
 
         public TaggedValue() {
             this.tag = new Text();
@@ -48,9 +47,17 @@ public class Step2
             nGram.readFields(in);
         }
 
-        public Text getTag() { return tag; }
-        public LongWritable getCount() { return count; }
-        public Text getNGram() { return nGram; }
+        public Text getTag() {
+            return tag;
+        }
+
+        public LongWritable getCount() {
+            return count;
+        }
+
+        public Text getNGram() {
+            return nGram;
+        }
     }
 
     public static class MapperClass extends Mapper<LongWritable, Text, Text, TaggedValue> {
@@ -82,7 +89,8 @@ public class Step2
                 long count = Long.parseLong(fields[2]);
 
                 TaggedValue outVal = new TaggedValue("2GRAM", count, String.format("%s %s", w1, w2));
-                context.write(new Text(String.format("%s %s %s",w2 ,w1, NULL_CHARACTER)), outVal); // CHANGE IN THE WORD ORDER!
+                context.write(new Text(String.format("%s %s %s", w2, w1, NULL_CHARACTER)), outVal); // CHANGE IN THE
+                                                                                                    // WORD ORDER!
             }
 
             if (fields.length == 2) {
@@ -91,7 +99,8 @@ public class Step2
                     String w1 = fields[0];
                     long n1 = Long.parseLong(fields[1]);
 
-                    context.write(new Text(String.format("%s %s %s", w1, NULL_CHARACTER, NULL_CHARACTER)), new TaggedValue("1GRAM", n1, String.format("%s", w1)));
+                    context.write(new Text(String.format("%s %s %s", w1, NULL_CHARACTER, NULL_CHARACTER)),
+                            new TaggedValue("1GRAM", n1, String.format("%s", w1)));
 
                 }
             }
@@ -122,19 +131,21 @@ public class Step2
                 String nGram = tv.getNGram().toString();
 
                 switch (tag) {
-                    case "3GRAM-2" : // W2 case
-                        context.write(new Text(nGram), new Text(String.format("C0:%d C1:%d C2:%d N3:%d", C0, NorC1, NorC2, count)));
+                    case "3GRAM-2": // W2 case
+                        context.write(new Text(nGram),
+                                new Text(String.format("C0:%d C1:%d C2:%d N3:%d", C0, NorC1, NorC2, count)));
                         break;
 
                     case "3GRAM-3": // W3 case
-                        context.write(new Text(nGram), new Text(String.format("C0:%d N1:%d N2:%d N3:%d", C0, NorC1, NorC2, count)));
+                        context.write(new Text(nGram),
+                                new Text(String.format("C0:%d N1:%d N2:%d N3:%d", C0, NorC1, NorC2, count)));
                         break;
 
-                    case "2GRAM" :
+                    case "2GRAM":
                         NorC2 = count;
                         break;
 
-                    case "1GRAM" :
+                    case "1GRAM":
                         NorC1 = count;
                         break;
 
@@ -172,10 +183,10 @@ public class Step2
     public static void main(String[] args) throws Exception {
         System.out.println("[DEBUG] STEP 2 started!");
 
-//        String jarBucketName = "jarbucket1012";
+        // String jarBucketName = "jarbucket1012";
         String jarBucketName = "hadoop-map-reduce-bucket";
 
-        String s3InputPath = "s3a://" + jarBucketName + "/step1_output_large/C0";
+        String s3InputPath = "s3a://" + jarBucketName + "/step1_output_large_splitted/C0";
         FileSystem fs = FileSystem.get(URI.create(s3InputPath), new Configuration());
         String c0Value = null;
 
@@ -193,7 +204,6 @@ public class Step2
 
         Configuration conf = new Configuration();
         conf.set("C0", c0Value);
-
 
         Job job = Job.getInstance(conf, "Step2");
 
@@ -213,8 +223,8 @@ public class Step2
 
         job.setInputFormatClass(TextInputFormat.class);
 
-        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step1_output_large/"));
-        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step2_output_large/"));
+        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step1_output_large_splitted/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step2_output_large_splitted/"));
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
