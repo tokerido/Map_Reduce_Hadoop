@@ -7,6 +7,7 @@ target/
 /META-INF/
 /src/META-INF/
 /src/main/java/META-INF/
+/src/main/java/Step_1_2_Combined.java
 
 ### Eclipse ###
 .apt_generated

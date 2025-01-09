@@ -1,4 +1,3 @@
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.*;
@@ -9,30 +8,16 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
 import java.io.*;
-import java.net.URI;
 
 public class Step3 {
 
     public static class MapperClass extends Mapper<LongWritable, Text, Text, Text> {
 
         @Override
-        protected void setup(Context context) throws IOException, InterruptedException {
-
-        }
-
-        @Override
         protected void map(LongWritable key, Text value, Context context)
                 throws IOException, InterruptedException {
 
             String[] fields = value.toString().split("\\s+");
-//            if (fields.length != 6) {// Expecting: W1 W2 W3 C1/N1 C2/N2 N3
-//                System.err.println("Invalid input: " + value.toString());
-//            } else {
-//                Text outputKey = new Text(String.format("%s %s %s", fields[0], fields[1], fields[2]));
-//                Text outputValue = new Text(String.format("%s %s %s", fields[3], fields[4], fields[5]));
-//                context.write(outputKey, outputValue);
-//            }
-
             if (fields.length != 7) {// Expecting: W1 W2 W3 C0 C1/N1 C2/N2 N3
                 System.err.println("Invalid input: " + value.toString());
             } else {
@@ -44,13 +29,7 @@ public class Step3 {
 
     }
 
-
     public static class ReducerClass extends Reducer<Text, Text, Text, Text> {
-//        public Double C0;
-
-        protected void setup(Context context) throws IOException, InterruptedException {
-//            C0 = Double.parseDouble(context.getConfiguration().get("C0"));
-        }
 
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context)
@@ -97,7 +76,6 @@ public class Step3 {
                 if (C0 == 0 || C1 == 0 || C2 == 0 ||
                         N1 == 0 || N2 == 0 || N3 == 0) {
                     throw new RuntimeException("Invalid input: " + key.toString());
-//                    System.err.println("Invalid input: " + key.toString());
                 } else { // Calculate the probability
                     double k2 = (Math.log10(N2 + 1) + 1) / (Math.log10(N2 + 2) + 2);
                     double k3 = (Math.log10(N3 + 1) + 1) / (Math.log10(N3 + 2) + 2);
@@ -130,20 +108,7 @@ public class Step3 {
 //        String jarBucketName = "jarbucket1012";
         String jarBucketName = "hadoop-map-reduce-bucket";
 
-//        String s3InputPath = "s3a://" + jarBucketName + "/step1_2_combined_output_large/C0";
-//        FileSystem fs = FileSystem.get(URI.create(s3InputPath), new Configuration());
-//        String c0Value = null;
-//
-//        try (BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(new Path(s3InputPath))))) {
-//            // Read the first line only
-//            String line = reader.readLine();
-//            if (line != null && line.startsWith("C0")) {
-//                c0Value = line.split(" ")[1]; // Extract the value
-//            }
-//        }
-//
         Configuration conf = new Configuration();
-//        conf.set("C0", c0Value);
 
         Job job = Job.getInstance(conf, "Step3");
 
