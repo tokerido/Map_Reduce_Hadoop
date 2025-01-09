@@ -203,7 +203,7 @@ public class Step1 {
         job.getConfiguration().setLong("mapreduce.input.fileinputformat.split.maxsize", 10 * 1024); // 32MB (default is 128MB)
 
         // split for the large input files
-        job.getConfiguration().setLong("mapreduce.input.fileinputformat.split.maxsize", ?); // ? (default is 128MB)
+//        job.getConfiguration().setLong("mapreduce.input.fileinputformat.split.maxsize", ?); // ? (default is 128MB)
 
 
 //        job.setInputFormatClass(TextInputFormat.class);
