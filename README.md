@@ -136,11 +136,7 @@ Where:
 
 ### Scalability
 
-- full dataset runtime with default `71` mappers: `15 minutes, 33 seconds`.
-- full dataset runtime with `140` mappers: `17 minutes, 22 seconds`.
-- small sample of the dataset runtime with default `3` mappers: `7 minutes, 57 seconds`.
-- small sample of the dataset runtime with `6` mappers: `7 minutes, 55 seconds`.
-
-### Interesting Results
-
-- For selected word pairs, display the top-5 most likely next words.
+- full dataset runtime with default `71` mappers and 6 instances: `15 minutes, 33 seconds`.
+- full dataset runtime with `140` mappers and 6 instances: `17 minutes, 22 seconds`.
+- small sample of the dataset runtime with default `3` mappers and 1 instance: `7 minutes, 57 seconds`.
+- small sample of the dataset runtime with `6` mappers and 1 instance: `7 minutes, 55 seconds`.
