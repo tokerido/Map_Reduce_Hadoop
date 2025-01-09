@@ -15,7 +15,7 @@ import java.net.URI;
 public class Step2
 {
     ///
-    /// Custom writable value to store all the data necessary
+    /// Custom writable value to store all the necessary data
     ///
     public static class TaggedValue implements Writable {
         private final Text tag;    // For example: "1GRAM", "2GRAM", "3GRAM", "C0"
@@ -54,63 +54,45 @@ public class Step2
     }
 
     public static class MapperClass extends Mapper<LongWritable, Text, Text, TaggedValue> {
-        private boolean is1GramFile = false;
-        private boolean is2GramFile = false;
-        private boolean is3GramFile = false;
         private final String NULL_CHARACTER = "\u0000";
-
-        @Override
-        protected void setup(Context context) throws IOException, InterruptedException {
-            String filename = ((FileSplit) context.getInputSplit()).getPath().getName();
-            if (filename.contains("1gram")) {
-                is1GramFile = true;
-            } else if (filename.contains("2gram")) {
-                is2GramFile = true;
-            } else if (filename.contains("3gram")) {
-                is3GramFile = true;
-            }
-        }
 
         @Override
         protected void map(LongWritable key, Text value, Context context)
                 throws IOException, InterruptedException {
             String[] fields = value.toString().split("\\s+");
-            if (is3GramFile) {
-                // Format: w1 w2 w3 N3
-                if (fields.length == 4) {
-                    String w1 = fields[0];
-                    String w2 = fields[1];
-                    String w3 = fields[2];
-                    long n3 = Long.parseLong(fields[3]);
 
-                    TaggedValue outVal2 = new TaggedValue("3GRAM-2", n3, String.format("%s %s %s", w1, w2, w3));
-                    context.write(new Text(String.format("%s %s %s", w2, w1, w3)), outVal2);
+            // Format: w1 w2 w3 N3
+            if (fields.length == 4) {
+                String w1 = fields[0];
+                String w2 = fields[1];
+                String w3 = fields[2];
+                long n3 = Long.parseLong(fields[3]);
 
-                    TaggedValue outVal3 = new TaggedValue("3GRAM-3", n3, String.format("%s %s %s", w1, w2, w3)); // CHANGE IN THE WORD ORDER!
-                    context.write(new Text(String.format("%s %s %s", w3, w2, w1)), outVal3);
-                }
+                TaggedValue outVal2 = new TaggedValue("3GRAM-2", n3, String.format("%s %s %s", w1, w2, w3));
+                context.write(new Text(String.format("%s %s %s", w2, w1, w3)), outVal2); // CHANGE IN THE WORD ORDER!
+
+                TaggedValue outVal3 = new TaggedValue("3GRAM-3", n3, String.format("%s %s %s", w1, w2, w3));
+                context.write(new Text(String.format("%s %s %s", w3, w2, w1)), outVal3); // CHANGE IN THE WORD ORDER!
             }
-            else if (is2GramFile) {
-                // Format: wA wB N2
-                if (fields.length == 3) {
-                    String w1 = fields[0];
-                    String w2 = fields[1];
-                    long count = Long.parseLong(fields[2]);
 
-                    TaggedValue outVal = new TaggedValue("2GRAM", count, String.format("%s %s", w1, w2));
-                    context.write(new Text(String.format("%s %s %s",w2 ,w1, NULL_CHARACTER)), outVal);
-                }
+            // Format: wA wB N2
+            if (fields.length == 3) {
+                String w1 = fields[0];
+                String w2 = fields[1];
+                long count = Long.parseLong(fields[2]);
+
+                TaggedValue outVal = new TaggedValue("2GRAM", count, String.format("%s %s", w1, w2));
+                context.write(new Text(String.format("%s %s %s",w2 ,w1, NULL_CHARACTER)), outVal); // CHANGE IN THE WORD ORDER!
             }
-            else if (is1GramFile) {
-                if (fields.length == 2) {
-                    if (!fields[0].equals("C0")) {
 
-                        String w1 = fields[0];
-                        long n1 = Long.parseLong(fields[1]);
+            if (fields.length == 2) {
+                if (!fields[0].equals("C0")) {
 
-                        context.write(new Text(String.format("%s %s %s", w1, NULL_CHARACTER, NULL_CHARACTER)), new TaggedValue("1GRAM", n1, String.format("%s", w1) ));
+                    String w1 = fields[0];
+                    long n1 = Long.parseLong(fields[1]);
 
-                    }
+                    context.write(new Text(String.format("%s %s %s", w1, NULL_CHARACTER, NULL_CHARACTER)), new TaggedValue("1GRAM", n1, String.format("%s", w1)));
+
                 }
             }
         }
@@ -161,13 +143,39 @@ public class Step2
         }
     }
 
+    ///
+    /// Partition by the first word
+    ///
+    public static class PartitionerClass extends Partitioner<Text, TaggedValue> {
+
+        @Override
+        public int getPartition(Text key, TaggedValue value, int numPartitions) {
+            String w1 = key.toString().split(" ")[0];
+            return Math.abs(w1.hashCode() % numPartitions);
+        }
+    }
+
+    public static class GroupingComparator extends WritableComparator {
+        protected GroupingComparator() {
+            super(Text.class, true);
+        }
+
+        @Override
+        public int compare(WritableComparable a, WritableComparable b) {
+            Text key1 = (Text) a;
+            Text key2 = (Text) b;
+
+            return key1.compareTo(key2);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         System.out.println("[DEBUG] STEP 2 started!");
 
 //        String jarBucketName = "jarbucket1012";
         String jarBucketName = "hadoop-map-reduce-bucket";
 
-        String s3InputPath = "s3a://" + jarBucketName + "/step1_output_small/part-r-00000";
+        String s3InputPath = "s3a://" + jarBucketName + "/step1_output_large/C0";
         FileSystem fs = FileSystem.get(URI.create(s3InputPath), new Configuration());
         String c0Value = null;
 
@@ -193,6 +201,9 @@ public class Step2
         job.setMapperClass(MapperClass.class);
         job.setReducerClass(ReducerClass.class);
 
+        job.setPartitionerClass(PartitionerClass.class);
+        job.setGroupingComparatorClass(GroupingComparator.class);
+
         job.setMapOutputKeyClass(Text.class);
         job.setMapOutputValueClass(TaggedValue.class);
 
@@ -202,8 +213,8 @@ public class Step2
 
         job.setInputFormatClass(TextInputFormat.class);
 
-        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step1_output_small/"));
-        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step2_output_small/"));
+        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step1_output_large/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step2_output_large/"));
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }

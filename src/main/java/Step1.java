@@ -74,6 +74,7 @@ public class Step1 {
                 }
             }
             return true;
+
         }
 
         ///
@@ -95,7 +96,7 @@ public class Step1 {
                     }
                 }
             } else {
-                System.out.println("fields length is 0");
+                throw new IOException("Invalid input line: " + line.toString());
             }
         }
     }
@@ -149,7 +150,7 @@ public class Step1 {
     }
 
     ///
-    /// Combine all the counts of the mapper into single values
+    /// Combine locally all the counts of the mapper into single values
     /// For example:
     /// [(Danny,1),(Danny,1),(Danny,1),(Tammy,1),(Tammy,1)] -> [(Danny,3),(Tammy,2)]
     ///
@@ -188,12 +189,6 @@ public class Step1 {
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "Step1");
 
-//        int NUM_MAPPERS = 4;
-//        conf.setInt("mapreduce.job.maps", NUM_MAPPERS);
-        job.getConfiguration().setLong("mapreduce.input.fileinputformat.split.maxsize", 10 * 1024); // 32MB (default is 128MB)
-
-
-
         job.setJarByClass(Step1.class);
         job.setMapperClass(MapperClass.class);
         job.setReducerClass(ReducerClass.class);
@@ -204,17 +199,23 @@ public class Step1 {
         job.setOutputValueClass(Text.class);
         job.setOutputFormatClass(TextOutputFormat.class);
 
-        job.setInputFormatClass(TextInputFormat.class);
-        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/input/"));
+        // split for the small input files
+        job.getConfiguration().setLong("mapreduce.input.fileinputformat.split.maxsize", 10 * 1024); // 32MB (default is 128MB)
 
-//        job.setInputFormatClass(SequenceFileInputFormat.class); // For S3 Ngram data
-//        FileInputFormat.addInputPath(job,
-//                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/3gram/data"));
-//        FileInputFormat.addInputPath(job,
-//                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/2gram/data"));
-//        FileInputFormat.addInputPath(job,
-//                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/1gram/data"));
+        // split for the large input files
+        job.getConfiguration().setLong("mapreduce.input.fileinputformat.split.maxsize", ?); // ? (default is 128MB)
 
+
+//        job.setInputFormatClass(TextInputFormat.class);
+//        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/input/"));
+
+        job.setInputFormatClass(SequenceFileInputFormat.class); // For S3 Ngram data
+        FileInputFormat.addInputPath(job,
+                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/3gram/data"));
+        FileInputFormat.addInputPath(job,
+                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/2gram/data"));
+        FileInputFormat.addInputPath(job,
+                new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/1gram/data"));
 
 
         MultipleOutputs.addNamedOutput(job, "1gram", TextOutputFormat.class, Text.class, Text.class);
@@ -222,8 +223,7 @@ public class Step1 {
         MultipleOutputs.addNamedOutput(job, "3gram", TextOutputFormat.class, Text.class, Text.class);
         MultipleOutputs.addNamedOutput(job, "error", TextOutputFormat.class, Text.class, Text.class);
 
-
-        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step1_output_small/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step1_output_large/"));
 
         boolean success = job.waitForCompletion(true);
 
@@ -233,7 +233,7 @@ public class Step1 {
                     .findCounter("CustomGroup", "C0")
                     .getValue();
 
-            String s3OutputPath = "s3://" + jarBucketName + "/step1_output_small/part-r-00000";
+            String s3OutputPath = "s3://" + jarBucketName + "/step1_output_large/C0";
 
             FileSystem fs = FileSystem.get(URI.create(s3OutputPath), new Configuration());
             try (BufferedWriter writer = new BufferedWriter(

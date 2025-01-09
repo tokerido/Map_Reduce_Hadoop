@@ -1,9 +1,7 @@
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
@@ -27,11 +25,97 @@ import org.apache.hadoop.fs.FileSystem;
 
 public class Step_1_2_Combined {
 
+    public static class UniqueKey implements WritableComparable<UniqueKey> {
+        private final Text nGram;  // e.g. "w1 w2 w3"
+        private final Text tag;      // e.g. "3GRAM-2" or "3GRAM-3"
+
+        public UniqueKey() {
+            this.nGram = new Text();
+            this.tag = new Text();
+        }
+
+        public UniqueKey(String nGram, String tag) {
+            this.nGram = new Text(nGram);
+            this.tag = new Text(tag);
+        }
+
+        public Text getNGram() {
+            return nGram;
+        }
+
+        public Text getTag() {
+            return tag;
+        }
+
+        private static int getTagPriority(String tag) {
+            // Adjust these as you prefer
+            switch (tag) {
+                case "1GRAM":    return 1;
+                case "2GRAM":    return 2;
+                case "3GRAM-2":  return 3;
+                case "3GRAM-3":  return 4;
+                default:         return 999; // fallback if something unexpected
+            }
+        }
+
+        @Override
+        public void write(DataOutput out) throws IOException {
+            nGram.write(out);
+            tag.write(out);
+        }
+
+        @Override
+        public void readFields(DataInput in) throws IOException {
+            nGram.readFields(in);
+            tag.readFields(in);
+        }
+
+        /**
+         * compareTo: Here you decide how to sort the data.
+         * You want to IGNORE the tag in sorting order for the main sort,
+         * so first compare the nGram, ignoring the tag.
+         * If you want some tiebreak among tags, do that second.
+         */
+        @Override
+        public int compareTo(UniqueKey other) {
+            // Sort primarily by nGram
+            int cmp = this.nGram.compareTo(other.nGram);
+            if (cmp != 0) {
+                return cmp;
+            }
+            // If you want a secondary sort by tag (like "3GRAM-2" before "3GRAM-3"),
+            // then uncomment this:
+            int thisPriority = getTagPriority(this.tag.toString());
+            int otherPriority = getTagPriority(other.tag.toString());
+            return Integer.compare(thisPriority, otherPriority);
+
+            // If you truly want to IGNORE tag in ordering, return 0 if nGrams match
+//            return 0;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o instanceof UniqueKey) {
+                UniqueKey other = (UniqueKey) o;
+                // For equality, both nGram AND tag must match
+                return this.nGram.equals(other.nGram) &&
+                        this.tag.equals(other.tag);
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            // Combine nGram + tag in a standard way
+            return (nGram.hashCode() * 163) + tag.hashCode();
+        }
+    }
+
     ///
     /// Custom writable value to store all the data necessary
     ///
     public static class TaggedValue implements Writable {
-        private final Text tag;    // For example: "1GRAM", "2GRAM", "3GRAM", "C0"
+        private final Text tag;    // For example: "1GRAM", "2GRAM", "3GRAM"
         private final LongWritable count;  // The numeric count
         private final Text nGram;  // The original n-gram
 
@@ -66,11 +150,8 @@ public class Step_1_2_Combined {
         public Text getNGram() { return nGram; }
     }
 
-    public static class MapperClass extends Mapper<LongWritable, Text, Text, TaggedValue> {
+    public static class MapperClass extends Mapper<LongWritable, Text, UniqueKey, TaggedValue> {
         public final HashSet<String> STOPWORDS = new HashSet<>();
-        private boolean is1GramFile = false;
-        private boolean is2GramFile = false;
-        private boolean is3GramFile = false;
         private final String NULL_CHARACTER = "\u0000";
 
         @Override
@@ -92,17 +173,6 @@ public class Step_1_2_Combined {
                     "הא", "ה", "בל", "בין", "בזה", "ב", "אף",
                     "אי", "אותה", "או", "אבל", "א", "");
 
-//            FileSplit fileSplit = (FileSplit) context.getInputSplit();
-//            String currentFileName = fileSplit.getPath().getName();
-//            System.out.println("Processing file: " + currentFileName);
-//            if (currentFileName.contains("1gram")) {
-//                is1GramFile = true;
-//            } else if (currentFileName.contains("2gram")) {
-//                is2GramFile = true;
-//            } else if (currentFileName.contains("3gram")) {
-//                is3GramFile = true;
-//            }
-
         }
 
         ///
@@ -114,14 +184,11 @@ public class Step_1_2_Combined {
                 return false;
             }
 
-            for (int i = 0; i < words.length; i++) {
-                if (words[i] == null) {
+            for (String word : words) {
+                if (word == null) {
                     return false;
                 }
-                if (words[i].startsWith("\"") && words[i].length() > 1) {
-                    words[i] = words[i].substring(1);
-                }
-                if (STOPWORDS.contains(words[i])) {
+                if (STOPWORDS.contains(word)) {
                     return false;
                 }
             }
@@ -148,10 +215,14 @@ public class Step_1_2_Combined {
                         long n3 = Long.parseLong(fields[2]);
 
                         TaggedValue outVal2 = new TaggedValue("3GRAM-2", n3, String.format("%s %s %s", w1, w2, w3));
-                        context.write(new Text(String.format("%s %s %s", w2, w1, w3)), outVal2);// CHANGE IN THE WORD ORDER!
+//                        context.write(new Text(String.format("%s %s %s", w2, w1, w3)), outVal2);// CHANGE IN THE WORD ORDER!
+                        UniqueKey outKey2 = new UniqueKey(String.format("%s %s %s", w2, w1, w3), "3GRAM-2");
+                        context.write(outKey2, outVal2);// CHANGE IN THE WORD ORDER!
 
                         TaggedValue outVal3 = new TaggedValue("3GRAM-3", n3, String.format("%s %s %s", w1, w2, w3));
-                        context.write(new Text(String.format("%s %s %s", w3, w2, w1)), outVal3);// CHANGE IN THE WORD ORDER!
+//                        context.write(new Text(String.format("%s %s %s", w3, w2, w1)), outVal3);// CHANGE IN THE WORD ORDER!
+                        UniqueKey outKey3 = new UniqueKey(String.format("%s %s %s", w3, w2, w1), "3GRAM-3");
+                        context.write(outKey3, outVal3);// CHANGE IN THE WORD ORDER!
                     }
 
                     // Format: wA wB N2
@@ -161,7 +232,9 @@ public class Step_1_2_Combined {
                         long count = Long.parseLong(fields[2]);
 
                         TaggedValue outVal = new TaggedValue("2GRAM", count, String.format("%s %s", w1, w2));
-                        context.write(new Text(String.format("%s %s %s",w2 ,w1, NULL_CHARACTER)), outVal);
+//                        context.write(new Text(String.format("%s %s %s",w2 ,w1, NULL_CHARACTER)), outVal); // CHANGE IN THE WORD ORDER!
+                        UniqueKey outKey = new UniqueKey(String.format("%s %s %s", w2, w1, NULL_CHARACTER), "2GRAM");
+                        context.write(outKey, outVal);
                     }
 
 
@@ -170,26 +243,18 @@ public class Step_1_2_Combined {
                         long count = Long.parseLong(fields[2]);
 
                         TaggedValue outVal = new TaggedValue("1GRAM", count, String.format("%s", w1));
-                        context.write(new Text(String.format("%s %s %s", w1, NULL_CHARACTER, NULL_CHARACTER)), outVal);
+//                        context.write(new Text(String.format("%s %s %s", w1, NULL_CHARACTER, NULL_CHARACTER)), outVal);
+                        UniqueKey outKey = new UniqueKey(String.format("%s %s %s", w1, NULL_CHARACTER, NULL_CHARACTER), "1GRAM");
+                        context.write(outKey, outVal);
                         // Add to the total word count in the corpus - C0
-//                            context.getCounter("CustomGroup", "C0").increment(count);
-                        context.write(new Text(String.format("%s %s %s", NULL_CHARACTER, NULL_CHARACTER, "C0")),
-                                        new TaggedValue("C0", count, ""));
+                        context.getCounter("CustomGroup", "C0").increment(Integer.parseInt(fields[2]));
                     }
                 }
             }
             else {
-                System.out.println("fields length is 0");
+                throw new RuntimeException(String.format("fields length is %d", fields.length));
             }
         }
-
-//        @Override
-//        protected void cleanup(Context context) throws IOException, InterruptedException {
-//
-////            context.getConfiguration().set("C0" ,Long.toString(context.getCounter("CustomGroup", "C0").getValue()));
-//            long c0 = context.getCounter("CustomGroup", "C0").getValue();
-//            context.write(new Text("C0_TAG"), new TaggedValue("C0", c0, ""));
-//        }
     }
 
     ///
@@ -197,31 +262,20 @@ public class Step_1_2_Combined {
     /// For example:
     /// [(Danny,1),(Danny,1),(Danny,1),(Tammy,1),(Tammy,1)] -> [(Danny,3),(Tammy,2)]
     ///
-    public static class ReducerClass extends Reducer<Text, TaggedValue, Text, Text> {
+    public static class ReducerClass extends Reducer<UniqueKey, TaggedValue, Text, Text> {
 
-        public long C0;
         // For 1-grams:
         public long NorC1 = 0;
         // For 2-grams:
         public long NorC2 = 0;
-//        private MultipleOutputs<Text, Text> multipleOutputs;
-        @Override
-        protected void setup(Context context) throws IOException, InterruptedException {
-//            multipleOutputs = new MultipleOutputs<>(context);
-//            C0 = Long.parseLong(context.getConfiguration().get("C0"));
-        }
 
         @Override
-        public void reduce(Text key, Iterable<TaggedValue> values, Context context) throws IOException, InterruptedException {
+        public void reduce(UniqueKey key, Iterable<TaggedValue> values, Context context) throws IOException, InterruptedException {
 
             TaggedValue lastVal = null;
             long sum = 0;
 
-            boolean lastRoundUpdate = false;
-
             for (TaggedValue value : values) {
-
-//                /*Debug*/context.write(new Text(String.format("Gram %s", value.getNGram())), new Text(""));
 
                 if (lastVal == null){ // Set the first value
                     lastVal = value;
@@ -229,24 +283,17 @@ public class Step_1_2_Combined {
                     continue;
                 }
 
-                if (value.getNGram().equals(lastVal.getNGram())) {
+                if (value.getNGram().equals(lastVal.getNGram()) && value.getTag().equals(lastVal.getTag())) {
                     sum += value.getCount().get();
-                    lastRoundUpdate = false;
-
-//                    /*Debug*/context.write(new Text(String.format("In gram %s, changed sum to: %d", lastVal.getNGram(), sum)), new Text(""));
                 }
                 else {
-
                     handleSum(lastVal, sum, context);
-
-//                    /*Debug*/context.write(new Text(String.format("Moving from value %s to value %s", lastVal.getNGram(), value.getNGram())), new Text(""));
-                    lastRoundUpdate = true;
                     lastVal = value;
                     sum = value.getCount().get();
                 }
             }
 
-            if (lastVal != null && !lastRoundUpdate)
+            if (lastVal != null)
                 handleSum(lastVal,sum,context);
         }
 
@@ -256,11 +303,11 @@ public class Step_1_2_Combined {
 
             switch (tag) {
                 case "3GRAM-2" : // W2 case
-                    context.write(new Text(nGram), new Text(String.format("C0:%d C1:%d C2:%d N3:%d", C0, NorC1, NorC2, sum)));
+                    context.write(new Text(nGram), new Text(String.format("C1:%d C2:%d N3:%d", NorC1, NorC2, sum)));
                     break;
 
                 case "3GRAM-3": // W3 case
-                    context.write(new Text(nGram), new Text(String.format("C0:%d N1:%d N2:%d N3:%d", C0, NorC1, NorC2, sum)));
+                    context.write(new Text(nGram), new Text(String.format("N1:%d N2:%d N3:%d", NorC1, NorC2, sum)));
                     break;
 
                 case "2GRAM" :
@@ -269,10 +316,6 @@ public class Step_1_2_Combined {
 
                 case "1GRAM" :
                     NorC1 = sum;
-                    break;
-
-                case "C0":
-                    C0 = sum;
                     break;
             }
         }
@@ -283,18 +326,14 @@ public class Step_1_2_Combined {
     /// For example:
     /// [(Danny,1),(Danny,1),(Danny,1),(Tammy,1),(Tammy,1)] -> [(Danny,3),(Tammy,2)]
     ///
-    public static class CombinerClass extends Reducer<Text, TaggedValue, Text, TaggedValue> {
+    public static class CombinerClass extends Reducer<UniqueKey, TaggedValue, UniqueKey, TaggedValue> {
         @Override
-        public void reduce(Text key, Iterable<TaggedValue> values, Context context) throws IOException, InterruptedException {
+        public void reduce(UniqueKey key, Iterable<TaggedValue> values, Context context) throws IOException, InterruptedException {
 
             TaggedValue lastVal = null;
             long sum = 0;
 
-            boolean lastRoundUpdate = false;
-
             for (TaggedValue value : values) {
-
-//                /*Debug*/context.write(new Text(String.format("Gram %s", value.getNGram())), new Text(""));
 
                 if (lastVal == null){ // Set the first value
                     lastVal = value;
@@ -302,63 +341,68 @@ public class Step_1_2_Combined {
                     continue;
                 }
 
-                if (value.getNGram().equals(lastVal.getNGram())) {
+                if (value.getNGram().equals(lastVal.getNGram()) && value.getTag().equals(lastVal.getTag())) {
                     sum += value.getCount().get();
-                    lastRoundUpdate = false;
-
-//                    /*Debug*/context.write(new Text(String.format("In gram %s, changed sum to: %d", lastVal.getNGram(), sum)), new Text(""));
                 }
                 else {
-
-                    context.write(key, lastVal);
-
-//                    /*Debug*/context.write(new Text(String.format("Moving from value %s to value %s", lastVal.getNGram(), value.getNGram())), new Text(""));
-                    lastRoundUpdate = true;
+                    context.write(key, new TaggedValue(lastVal.getTag().toString(), sum, lastVal.getNGram().toString()));
                     lastVal = value;
                     sum = value.getCount().get();
                 }
             }
 
-            if (lastVal != null && !lastRoundUpdate)
-                context.write(key, lastVal);
+            if (lastVal != null)
+                context.write(key, new TaggedValue(lastVal.getTag().toString(), sum, lastVal.getNGram().toString()));
         }
-
     }
+
 
     ///
     /// Partition by the first word
     ///
-//    public static class PartitionerClass extends Partitioner<Text, Text> {
-//
-//        @Override
-//        public int getPartition(Text key, Text value, int numPartitions) {
-//            String w1 = key.toString().split(" ")[0];
-//            return Math.abs(w1.hashCode() % numPartitions);
-//        }
-//    }
+    public static class PartitionerClass extends Partitioner<UniqueKey, TaggedValue> {
+
+        @Override
+        public int getPartition(UniqueKey key, TaggedValue value, int numPartitions) {
+            String w1 = key.getNGram().toString().split(" ")[0];
+            return Math.abs(w1.hashCode() % numPartitions);
+        }
+    }
+
+    public static class GroupingComparator extends WritableComparator {
+        protected GroupingComparator() {
+            super(UniqueKey.class, true);
+        }
+
+        @Override
+        public int compare(WritableComparable a, WritableComparable b) {
+            UniqueKey key1 = (UniqueKey) a;
+            UniqueKey key2 = (UniqueKey) b;
+            // Group only by w1w2
+            return key1.getNGram().compareTo(key2.getNGram());
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         System.out.println("[DEBUG] STEP 1_2_Combined started!");
 
-//         String jarBucketName = "jarbucket1012";
+//        String jarBucketName = "jarbucket1012";
         String jarBucketName = "hadoop-map-reduce-bucket";
 
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "Step1");
 
-//        int NUM_MAPPERS = 4;
-//        conf.setInt("mapreduce.job.maps", NUM_MAPPERS);
-//        job.getConfiguration().setLong("mapreduce.input.fileinputformat.split.maxsize", 10 * 1024); // 32MB (default is 128MB)
-
-
+//        job.getConfiguration().setLong("mapreduce.input.fileinputformat.split.maxsize", 64 * 1024 * 1024); // 64MB (default is 128MB)
 
         job.setJarByClass(Step1.class);
         job.setMapperClass(MapperClass.class);
         job.setReducerClass(ReducerClass.class);
-//        job.setPartitionerClass(PartitionerClass.class);
         job.setCombinerClass(CombinerClass.class);
 
-        job.setMapOutputKeyClass(Text.class);
+        job.setPartitionerClass(PartitionerClass.class);
+        job.setGroupingComparatorClass(GroupingComparator.class);
+
+        job.setMapOutputKeyClass(UniqueKey.class);
         job.setMapOutputValueClass(TaggedValue.class);
 
         job.setOutputKeyClass(Text.class);
@@ -377,9 +421,25 @@ public class Step_1_2_Combined {
                 new Path("s3://datasets.elasticmapreduce/ngrams/books/20090715/heb-all/1gram/data"));
 
 
-        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step1_output_combined/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step1_2_combined_output_large/"));
 
         boolean success = job.waitForCompletion(true);
+
+        if (success) {
+            // Write down C0 value to use in the next step
+            long c0Value = job.getCounters()
+                    .findCounter("CustomGroup", "C0")
+                    .getValue();
+
+            String s3OutputPath = "s3://" + jarBucketName + "/step1_2_combined_output_large/C0";
+
+            FileSystem fs = FileSystem.get(URI.create(s3OutputPath), new Configuration());
+            try (BufferedWriter writer = new BufferedWriter(
+                    new OutputStreamWriter(fs.create(new Path(s3OutputPath), true)))) {
+                writer.write("C0 " + c0Value);
+                writer.newLine();
+            }
+        }
         System.exit(success ? 0 : 1);
     }
 

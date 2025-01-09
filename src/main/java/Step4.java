@@ -64,7 +64,6 @@ public class Step4 {
         public int compare(WritableComparable a, WritableComparable b) {
             ProbabilityKey key1 = (ProbabilityKey) a;
             ProbabilityKey key2 = (ProbabilityKey) b;
-            // Group only by w1w2
             return key1.getW1w2().compareTo(key2.getW1w2());
         }
     }
@@ -130,8 +129,8 @@ public class Step4 {
         job.setInputFormatClass(TextInputFormat.class);
         job.setOutputFormatClass(TextOutputFormat.class);
 
-        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step3_output/"));
-        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step4_output/"));
+        FileInputFormat.addInputPath(job, new Path("s3://" + jarBucketName + "/step3_output_large/"));
+        FileOutputFormat.setOutputPath(job, new Path("s3://" + jarBucketName + "/step4_output_large/"));
 
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }

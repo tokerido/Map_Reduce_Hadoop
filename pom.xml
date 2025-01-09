@@ -101,6 +101,12 @@
             <artifactId>aws-java-sdk-emr</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>log4j</groupId>
+            <artifactId>log4j</artifactId>
+            <version>1.2.17</version>
+        </dependency>
+
     </dependencies>
 
 
@@ -239,35 +245,35 @@
                             <finalName>Step4</finalName>
                         </configuration>
                     </execution>
-                    <!-- Execution for step1_2_Combined.jar -->
-                    <execution>
-                        <id>Step_1_2_Combined-jar</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <filters>
-                                <filter>
-                                    <artifact>*:*</artifact>
-                                    <excludes>
-                                        <exclude>META-INF/*.SF</exclude>
-                                        <exclude>META-INF/*.DSA</exclude>
-                                        <exclude>META-INF/*.RSA</exclude>
-                                        <exclude>META-INF/LICENSE*</exclude>
-                                        <exclude>license/*</exclude>
-                                    </excludes>
-                                </filter>
-                            </filters>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>Step_1_2_Combined</mainClass>
-                                </transformer>
-                            </transformers>
-                            <finalName>Step_1_2_Combined</finalName>
-                        </configuration>
-                    </execution>
-                    <!-- Execution for step1_2_Combined.jar -->
+<!--                    &lt;!&ndash; Execution for step1_2_Combined.jar &ndash;&gt;-->
+<!--                    <execution>-->
+<!--                        <id>Step_1_2_Combined-jar</id>-->
+<!--                        <phase>package</phase>-->
+<!--                        <goals>-->
+<!--                            <goal>shade</goal>-->
+<!--                        </goals>-->
+<!--                        <configuration>-->
+<!--                            <filters>-->
+<!--                                <filter>-->
+<!--                                    <artifact>*:*</artifact>-->
+<!--                                    <excludes>-->
+<!--                                        <exclude>META-INF/*.SF</exclude>-->
+<!--                                        <exclude>META-INF/*.DSA</exclude>-->
+<!--                                        <exclude>META-INF/*.RSA</exclude>-->
+<!--                                        <exclude>META-INF/LICENSE*</exclude>-->
+<!--                                        <exclude>license/*</exclude>-->
+<!--                                    </excludes>-->
+<!--                                </filter>-->
+<!--                            </filters>-->
+<!--                            <transformers>-->
+<!--                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">-->
+<!--                                    <mainClass>Step_1_2_Combined</mainClass>-->
+<!--                                </transformer>-->
+<!--                            </transformers>-->
+<!--                            <finalName>Step_1_2_Combined</finalName>-->
+<!--                        </configuration>-->
+<!--                    </execution>-->
+                    <!-- Execution for Interesting_word_finder.jar -->
                     <execution>
                         <id>Interesting_word_finder-jar</id>
                         <phase>package</phase>
